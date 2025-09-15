@@ -1,103 +1,124 @@
 import Image from "next/image";
 
-export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
+// Componente Header
+const Header = () => (
+  <header className="fixed top-0 z-50 w-full backdrop-filter backdrop-blur-lg bg-slate-950/70 shadow-lg">
+    <div className="container mx-auto flex items-center justify-between px-8 py-4">
+      <div className="flex items-center gap-4">
         <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
+          src="/logoPNG-removebg-preview.png"
+          alt="Logo MatchStudy"
+          width={150}
+          height={60}
           priority
         />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+        <span className="font-bold text-2xl text-purple-400 font-display">
+          MatchStudy
+        </span>
+      </div>
+      <nav className="flex gap-6">
+        <a href="#features" className="text-gray-300 hover:text-purple-400 transition-colors font-semibold">
+          Características
+        </a>
+        <a href="#contact" className="text-gray-300 hover:text-purple-400 transition-colors font-semibold">
+          Contacto
+        </a>
+        <a href="#login" className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-semibold">
+          Login
+        </a>
+      </nav>
+    </div>
+  </header>
+);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
+// Componente Hero Section
+const HeroSection = () => (
+  <main className="flex flex-col items-center justify-center text-center px-4 py-32 md:py-48 bg-gradient-to-br from-slate-950 to-gray-900">
+    <h1 className="text-5xl md:text-6xl font-extrabold text-white mb-6 leading-tight animate-fade-in-up">
+      Bienvenido a MatchStudy 🚀
+    </h1>
+    <p className="text-lg md:text-xl text-gray-400 mb-8 max-w-2xl animate-fade-in-up delay-150">
+      Tu plataforma para conectar con compañeros, compartir materiales y organizar sesiones de estudio en línea de manera sencilla.
+    </p>
+    <a href="#login" className="bg-purple-600 text-white px-8 py-4 rounded-full text-lg font-bold shadow-lg hover:bg-purple-700 transition-transform transform hover:scale-105 animate-fade-in-up delay-300">
+      Empezar Ahora
+    </a>
+  </main>
+);
+
+// Componente Features Section
+const FeaturesSection = () => (
+  <section id="features" className="py-20 px-4 bg-gray-900">
+    <div className="container mx-auto">
+      <h2 className="text-4xl font-bold text-center text-purple-400 mb-12">
+        Características
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <FeatureCard
+          title="Videollamadas Integradas"
+          description="Conéctate con tus compañeros en tiempo real para sesiones de estudio colaborativas sin salir de la plataforma."
+        />
+        <FeatureCard
+          title="Biblioteca de Materiales"
+          description="Comparte y consulta apuntes, ejercicios y recursos educativos, creando una biblioteca de conocimiento colectivo."
+        />
+        <FeatureCard
+          title="Organización y Planificación"
+          description="Planifica tus sesiones de estudio y proyectos en grupo de forma sencilla con nuestro calendario y herramientas de organización."
+        />
+      </div>
+    </div>
+  </section>
+);
+
+// Componente Tarjeta de Característica
+const FeatureCard = ({ title, description }) => (
+  <div className="bg-slate-800 p-8 rounded-xl shadow-lg border border-slate-700 hover:border-purple-500 transition-transform hover:scale-105 transform">
+    <h3 className="text-2xl font-semibold text-white mb-4">
+      {title}
+    </h3>
+    <p className="text-gray-400">
+      {description}
+    </p>
+  </div>
+);
+
+// Componente Footer
+const Footer = () => (
+  <footer id="contact" className="bg-slate-950 text-gray-500 py-6">
+    <div className="container mx-auto flex flex-col md:flex-row justify-between items-center px-4 gap-4">
+      <p className="text-sm">
+        © 2025 MatchStudy. Todos los derechos reservados.
+      </p>
+      <div className="flex gap-4">
+        {/* Usar íconos para redes sociales es más visual y profesional */}
+        <a href="#" className="hover:text-white transition-colors">
+          <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-label="Facebook">
+            {/* SVG Path for Facebook */}
+          </svg>
         </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
+        <a href="#" className="hover:text-white transition-colors">
+          <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-label="Instagram">
+            {/* SVG Path for Instagram */}
+          </svg>
         </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
+        <a href="#" className="hover:text-white transition-colors">
+          <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-label="Twitter">
+            {/* SVG Path for Twitter */}
+          </svg>
         </a>
-      </footer>
+      </div>
+    </div>
+  </footer>
+);
+
+export default function Home() {
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-950 text-white font-sans">
+      <Header />
+      <HeroSection />
+      <FeaturesSection />
+      <Footer />
     </div>
   );
 }
