@@ -18,7 +18,21 @@ const HeroSection = () => (
     </Link>
   </main>
 );
+// --- La corrección está aquí ---
+// Se define una interfaz para especificar los tipos de las props
+interface FeatureCardProps {
+  title: string;
+  description: string;
+}
 
+// El componente ahora recibe las props con el tipo especificado
+const FeatureCard = ({ title, description }: FeatureCardProps) => (
+  <div className="bg-slate-800 p-8 rounded-xl shadow-lg border border-slate-700 hover:border-purple-500 transition-transform hover:scale-105 transform">
+    <h3 className="text-2xl font-semibold text-white mb-4">{title}</h3>
+    <p className="text-gray-400">{description}</p>
+  </div>
+);
+// --- Fin de la corrección ---
 const FeatureCard = ({ title, description }) => (
   <div className="bg-slate-800 p-8 rounded-xl shadow-lg border border-slate-700 hover:border-purple-500 transition-transform hover:scale-105 transform">
     <h3 className="text-2xl font-semibold text-white mb-4">{title}</h3>
