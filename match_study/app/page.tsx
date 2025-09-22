@@ -2,6 +2,11 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import Link from "next/link"; // <-- Importar Link de Next.js
 
+interface FeatureCardProps {
+  title: string;
+  description: string;
+}
+
 const HeroSection = () => (
   <main className="flex flex-col items-center justify-center text-center px-4 py-32 md:py-48 bg-gradient-to-br from-slate-950 to-gray-900">
     <h1 className="text-5xl md:text-6xl font-extrabold text-white mb-6 leading-tight animate-fade-in-up">
