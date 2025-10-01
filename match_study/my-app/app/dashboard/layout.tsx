@@ -1,41 +1,27 @@
-import type { Metadata } from "next";
-import { Geist } from "next/font/google";
-import { ThemeProvider } from "next-themes";
-//import "./globals.css";
+"use client";
+import { useState } from "react";
+import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
 
-const defaultUrl = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:3000";
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
 
-export const metadata: Metadata = {
-  metadataBase: new URL(defaultUrl),
-  title: "Next.js and Supabase Starter Kit",
-  description: "The fastest way to build apps with Next.js and Supabase",
-};
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  display: "swap",
-  subsets: ["latin"],
-});
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.className} antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
-      </body>
-    </html>
+    <div className="min-h-[100dvh] bg-gradient-to-br from-slate-950 to-slate-900 text-white">
+      <div className="flex">
+        {/* Sidebar a la izquierda */}
+        <Sidebar open={open} setOpen={setOpen} />
+
+        {/* Contenido */}
+        <div className="flex min-h-[100dvh] flex-1 flex-col lg:ml-72">
+          <Topbar onToggle={() => setOpen((v) => !v)} />
+
+          {/* Contenedor centrado y responsivo */}
+          <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            {children}
+          </main>
+        </div>
+      </div>
+    </div>
   );
 }

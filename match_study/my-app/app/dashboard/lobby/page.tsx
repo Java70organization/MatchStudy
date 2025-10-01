@@ -1,10 +1,11 @@
+import { Card, QuickLink } from "../../components/ui";
+
 export default function LobbyPage() {
   return (
     <section className="space-y-6">
       <h1 className="text-3xl md:text-4xl font-extrabold">Lobby</h1>
       <p className="text-slate-300 max-w-2xl">
-        Bienvenido 👋 Aquí verás un resumen rápido de tu actividad: próximas asesorías,
-        mensajes recientes y atajos a lo más usado.
+        Bienvenido 👋 Aquí verás un resumen rápido de tu actividad: próximas asesorías, mensajes recientes y atajos a lo más usado.
       </p>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -22,7 +23,6 @@ export default function LobbyPage() {
             <QuickLink href="/asesorias" label="Buscar asesorías" />
             <QuickLink href="/perfil" label="Ver perfil" />
             <QuickLink href="/perfil/configuracion" label="Editar perfil" />
-            <QuickLink href="/pagos" label="Pagos" />
           </div>
         </Card>
       </div>
@@ -30,22 +30,6 @@ export default function LobbyPage() {
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg">
-      <h2 className="mb-3 text-lg font-semibold">{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-function QuickLink({ href, label }: { href: string; label: string }) {
-  return (
-    <a
-      href={href}
-      className="inline-flex items-center rounded-lg border border-slate-800 bg-slate-800/60 px-3 py-2 text-sm text-slate-200 hover:border-purple-500 hover:bg-slate-800"
-    >
-      {label}
-    </a>
-  );
-}
+// UI local para esta ruta
+//function Card(props: any){ return (<div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg"><h2 className="mb-3 text-lg font-semibold">{props.title}</h2>{props.children}</div>); }
+//function QuickLink({ href, label }: { href: string; label: string }){ return (<a href={href} className="inline-flex items-center rounded-lg border border-slate-800 bg-slate-800/60 px-3 py-2 text-sm text-slate-200 hover:border-purple-500 hover:bg-slate-800">{label}</a>); }
