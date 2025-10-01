@@ -109,10 +109,9 @@ export default function LoginPage() {
 
       // Redirección post-login (ajusta la ruta según tu app)
       window.location.href = "/"; // por ejemplo al dashboard
-    } catch (err: any) {
-      setErrorMsg(err.message ?? "Error de autenticación");
-    } finally {
-      setLoading(false);
+    } catch (err: unknown) {
+       const msg = err instanceof Error ? err.message : String(err);
+       setErrorMsg(msg || "Error al iniciar sesión"); // o "Error al registrar"
     }
   };
 
