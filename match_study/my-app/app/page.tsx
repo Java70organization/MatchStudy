@@ -56,6 +56,11 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import Link from "next/link"; // <-- Importar Link de Next.js
 
+type FeatureCardProps = {
+  title: string;
+  description: string;
+};
+
 const HeroSection = () => (
   <main className="flex flex-col items-center justify-center text-center px-4 py-32 md:py-48 bg-gradient-to-br from-slate-950 to-gray-900">
     <h1 className="text-5xl md:text-6xl font-extrabold text-white mb-6 leading-tight animate-fade-in-up">
@@ -73,13 +78,12 @@ const HeroSection = () => (
   </main>
 );
 
-const FeatureCard = ({ title, description }) => (
+const FeatureCard: React.FC<FeatureCardProps> = ({ title, description }) => (
   <div className="bg-slate-800 p-8 rounded-xl shadow-lg border border-slate-700 hover:border-purple-500 transition-transform hover:scale-105 transform">
     <h3 className="text-2xl font-semibold text-white mb-4">{title}</h3>
     <p className="text-gray-400">{description}</p>
   </div>
 );
-
 const FeaturesSection = () => (
   <section id="features" className="py-20 px-4 bg-gray-900">
     <div className="container mx-auto">
