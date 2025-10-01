@@ -206,7 +206,7 @@ export default function RegistroPage() {
 
       // si requieres verificación de correo, redirige a login:
       window.location.href = "/login";
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = String(err?.message || "");
       // mensajes más amigables
       if (/already registered/i.test(msg)) {
