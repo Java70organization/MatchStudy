@@ -196,7 +196,7 @@ export default function RegistroPage() {
       if (!authUser) throw new Error("No se recibió el usuario de Auth");
 
       await ensureUserRow({
-        authId: authUser.id,
+        //authId: authUser.id,
         email: emailClean,
         displayName,
         userType,
