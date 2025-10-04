@@ -3,6 +3,7 @@ export type DBUser = {
   authId: string;
   email: string;
   displayName: string;
+  phone: string | null;
   userType: string; // ej. "student" | "tutor"
   createdAt: string;
   photoUrl: string | null;
@@ -52,10 +53,11 @@ export type DBUser = {
   return data as DBUser;
 }
   */
- // /lib/user.ts
+// /lib/user.ts
 export async function ensureUserRow(params: {
   email: string;
   displayName: string;
+  phone?: string | null;
   userType: string;
   photoUrl?: string | null;
   university?: string | null;
@@ -77,6 +79,7 @@ export async function ensureUserRow(params: {
     .insert({
       email: params.email,
       displayName: params.displayName,
+      phone: params.phone ?? null,
       userType: params.userType,
       createdAt: new Date().toISOString(),
       photoUrl: params.photoUrl ?? null,

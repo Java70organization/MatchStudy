@@ -10,7 +10,9 @@ export default function PerfilPage() {
           </div>
           <div>
             <h3 className="font-semibold mb-2">Estadísticas</h3>
-            <p className="text-slate-300 text-sm">Sesiones completadas, rating…</p>
+            <p className="text-slate-300 text-sm">
+              Sesiones completadas, rating…
+            </p>
           </div>
         </div>
       </div>

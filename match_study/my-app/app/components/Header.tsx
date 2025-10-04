@@ -3,12 +3,12 @@ import Link from "next/link";
 
 const Header = () => (
   <header className="fixed top-0 z-50 w-full backdrop-filter backdrop-blur-lg bg-slate-950/70 shadow-lg">
-    <div className="container mx-auto flex items-center justify-between px-8 py-4">
+    <div className="container mx-auto flex items-center px-8 py-4">
+      {/* Logo a la izquierda */}
       <div className="flex items-center gap-4">
-        {/* Logo redirige a la página principal */}
         <Link href="/" className="flex items-center gap-2">
           <Image
-            src="/logo.png"
+            src="https://lksruyrnhqwvkwaacwjq.supabase.co/storage/v1/object/public/Imagenes/logo.png"
             alt="Logo MatchStudy"
             width={150}
             height={60}
@@ -19,7 +19,9 @@ const Header = () => (
           </span>
         </Link>
       </div>
-      <nav className="flex gap-6">
+
+      {/* Navegación centrada */}
+      <nav className="flex-1 flex items-center justify-center gap-8">
         <a
           href="#features"
           className="text-gray-300 hover:text-purple-400 transition-colors font-semibold"
@@ -32,13 +34,16 @@ const Header = () => (
         >
           Contacto
         </a>
-        {/* Botón de login usando Link */}
-        <Link href="/login">
-          <button className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-semibold">
+      </nav>
+
+      {/* Botón de login a la derecha */}
+      <div className="flex items-center">
+        <Link href="/auth/login">
+          <button className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-semibold">
             Login
           </button>
         </Link>
-      </nav>
+      </div>
     </div>
   </header>
 );

@@ -5,7 +5,8 @@ export default function LobbyPage() {
     <section className="space-y-6">
       <h1 className="text-3xl md:text-4xl font-extrabold">Lobby</h1>
       <p className="text-slate-300 max-w-2xl">
-        Bienvenido 👋 Aquí verás un resumen rápido de tu actividad: próximas asesorías, mensajes recientes y atajos a lo más usado.
+        Bienvenido 👋 Aquí verás un resumen rápido de tu actividad: próximas
+        asesorías, mensajes recientes y atajos a lo más usado.
       </p>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

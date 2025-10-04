@@ -51,23 +51,39 @@ export default function Home() {
 }
 */
 
-
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import Link from "next/link"; // <-- Importar Link de Next.js
+import Image from "next/image";
+import { Video, BookOpen, Calendar, Mail, User } from "lucide-react";
 
 type FeatureCardProps = {
   title: string;
   description: string;
+  icon: React.ComponentType<{ className?: string }>;
 };
 
 const HeroSection = () => (
   <main className="flex flex-col items-center justify-center text-center px-4 py-32 md:py-48 bg-gradient-to-br from-slate-950 to-gray-900">
-    <h1 className="text-5xl md:text-6xl font-extrabold text-white mb-6 leading-tight animate-fade-in-up">
+    <h1 className="text-5xl md:text-6xl font-extrabold text-white mb-8 leading-tight animate-fade-in-up">
       Bienvenido a MatchStudy 🚀
     </h1>
-    <p className="text-lg md:text-xl text-gray-400 mb-8 max-w-2xl animate-fade-in-up delay-150">
-      Tu plataforma para conectar con compañeros, compartir materiales y organizar sesiones de estudio en línea de manera sencilla.
+
+    {/* Logo centrado */}
+    <div className="mb-8 animate-fade-in-up delay-100">
+      <Image
+        src="https://lksruyrnhqwvkwaacwjq.supabase.co/storage/v1/object/public/Imagenes/logo.png"
+        alt="Logo MatchStudy"
+        width={400}
+        height={400}
+        className="rounded-2xl shadow-2xl border-4 border-purple-500/30 hover:border-purple-400/50 transition-all duration-300 hover:scale-105"
+        priority
+      />
+    </div>
+
+    <p className="text-lg md:text-xl text-gray-400 mb-8 max-w-2xl animate-fade-in-up delay-200">
+      Tu plataforma para conectar con compañeros, compartir materiales y
+      organizar sesiones de estudio en línea de manera sencilla.
     </p>
     {/* Aquí usamos Link para navegar a la página de login */}
     <Link href="./auth/login">
@@ -78,20 +94,154 @@ const HeroSection = () => (
   </main>
 );
 
-const FeatureCard: React.FC<FeatureCardProps> = ({ title, description }) => (
+const FeatureCard: React.FC<FeatureCardProps> = ({
+  title,
+  description,
+  icon: Icon,
+}) => (
   <div className="bg-slate-800 p-8 rounded-xl shadow-lg border border-slate-700 hover:border-purple-500 transition-transform hover:scale-105 transform">
-    <h3 className="text-2xl font-semibold text-white mb-4">{title}</h3>
+    <div className="flex items-center gap-4 mb-6">
+      <div className="p-3 bg-purple-600 rounded-lg">
+        <Icon className="h-8 w-8 text-white" />
+      </div>
+      <h3 className="text-2xl font-semibold text-white">{title}</h3>
+    </div>
     <p className="text-gray-400">{description}</p>
   </div>
 );
 const FeaturesSection = () => (
   <section id="features" className="py-20 px-4 bg-gray-900">
     <div className="container mx-auto">
-      <h2 className="text-4xl font-bold text-center text-purple-400 mb-12">Características</h2>
+      <h2 className="text-4xl font-bold text-center text-purple-400 mb-12">
+        Características
+      </h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <FeatureCard title="Videollamadas Integradas" description="Conéctate con tus compañeros en tiempo real para sesiones de estudio colaborativas sin salir de la plataforma." />
-        <FeatureCard title="Biblioteca de Materiales" description="Comparte y consulta apuntes, ejercicios y recursos educativos, creando una biblioteca de conocimiento colectivo." />
-        <FeatureCard title="Organización y Planificación" description="Planifica tus sesiones de estudio y proyectos en grupo de forma sencilla con nuestro calendario y herramientas de organización." />
+        <FeatureCard
+          icon={Video}
+          title="Videollamadas Integradas"
+          description="Conéctate con tus compañeros en tiempo real para sesiones de estudio colaborativas sin salir de la plataforma."
+        />
+        <FeatureCard
+          icon={BookOpen}
+          title="Biblioteca de Materiales"
+          description="Comparte y consulta apuntes, ejercicios y recursos educativos, creando una biblioteca de conocimiento colectivo."
+        />
+        <FeatureCard
+          icon={Calendar}
+          title="Organización y Planificación"
+          description="Planifica tus sesiones de estudio y proyectos en grupo de forma sencilla con nuestro calendario y herramientas de organización."
+        />
+      </div>
+    </div>
+  </section>
+);
+
+const ContactSection = () => (
+  <section id="contact" className="py-20 px-4 bg-slate-950">
+    <div className="container mx-auto">
+      <h2 className="text-4xl font-bold text-center text-purple-400 mb-12">
+        Nuestro Equipo
+      </h2>
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-slate-800 rounded-2xl shadow-xl border border-slate-700 overflow-hidden">
+          <div className="px-6 py-4 bg-purple-600/20 border-b border-slate-700">
+            <h3 className="text-xl font-semibold text-white flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Información de Contacto
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-700/50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-sm font-medium text-slate-300">
+                    Nombre
+                  </th>
+                  <th className="px-6 py-4 text-left text-sm font-medium text-slate-300">
+                    Correo Electrónico
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                <tr className="hover:bg-slate-700/30 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                        <User className="h-5 w-5 text-white" />
+                      </div>
+                      <span className="text-white font-medium">
+                        Ernesto David Casas Herrera
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-slate-400" />
+                      <a
+                        href="mailto:ernesto.cherrera@alumnos.udg.mx"
+                        className="text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        ernesto.cherrera@alumnos.udg.mx
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+                <tr className="hover:bg-slate-700/30 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                        <User className="h-5 w-5 text-white" />
+                      </div>
+                      <span className="text-white font-medium">
+                        Juan Antonio Valenzuela Aguilera
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-slate-400" />
+                      <a
+                        href="mailto:juan.valenzuela7221@alumnos.udg.mx"
+                        className="text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        juan.valenzuela7221@alumnos.udg.mx
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+                <tr className="hover:bg-slate-700/30 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                        <User className="h-5 w-5 text-white" />
+                      </div>
+                      <span className="text-white font-medium">
+                        Miguel Angel Hernandez de la Cruz
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-slate-400" />
+                      <a
+                        href="mailto:miguel.hernandez3986@alumnos.udg.mx"
+                        className="text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        miguel.hernandez3986@alumnos.udg.mx
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="text-center mt-8">
+          <p className="text-slate-400 text-sm">
+            ¿Tienes preguntas? No dudes en contactarnos. Estamos aquí para
+            ayudarte.
+          </p>
+        </div>
       </div>
     </div>
   </section>
@@ -104,6 +254,7 @@ export default function Home() {
         <Header />
         <HeroSection />
         <FeaturesSection />
+        <ContactSection />
         <Footer />
       </div>
     </div>
