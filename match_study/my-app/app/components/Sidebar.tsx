@@ -8,35 +8,70 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import {
   Home,
   BookOpen,
-  Calendar,
   MessageSquare,
   User,
-  Settings,
   HelpCircle,
   LogOut,
+  ChevronDown,
+  ChevronRight,
+  Rss,
+  Video,
+  FileText,
+  Calendar,
 } from "lucide-react";
 
 type SidebarProps = { open: boolean; setOpen: (v: boolean) => void };
 
-const NAV = [
-  { href: "/dashboard/lobby", label: "Lobby", icon: Home },
-  { href: "/dashboard/asesorias", label: "Asesorías", icon: BookOpen },
-  { href: "/dashboard/calendario", label: "Calendario", icon: Calendar },
-  { href: "/dashboard/mensajes", label: "Mensajes", icon: MessageSquare },
-  { href: "/dashboard/sesiones", label: "Mis sesiones", icon: BookOpen },
-  { href: "/dashboard/perfil", label: "Perfil", icon: User },
-  {
-    href: "/dashboard/configuracion",
-    label: "Configuración",
-    icon: Settings,
-  },
-  { href: "/dashboard/ayuda", label: "Ayuda", icon: HelpCircle },
-];
+type NavItem = {
+  href?: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  submenu?: {
+    href: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }[];
+};
 
 export default function Sidebar({ open, setOpen }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
+
+  const NAV: NavItem[] = [
+    { href: "/dashboard/lobby", label: "Lobby", icon: Home },
+    {
+      label: "Asesorías",
+      icon: BookOpen,
+      submenu: [
+        { href: "/dashboard/asesorias/feeds", label: "Feeds", icon: Rss },
+
+        {
+          href: "/dashboard/asesorias/materiales",
+          label: "Materiales",
+          icon: FileText,
+        },
+        {
+          href: "/dashboard/asesorias/mensajes",
+          label: "Mensajes",
+          icon: MessageSquare,
+        },
+        {
+          href: "/dashboard/asesorias/crear-sala",
+          label: "Salas",
+          icon: Video,
+        },
+        {
+          href: "/dashboard/organizacion/calendario",
+          label: "Calendario",
+          icon: Calendar,
+        },
+      ],
+    },
+    { href: "/dashboard/perfil", label: "Perfil", icon: User },
+    { href: "/dashboard/ayuda", label: "Ayuda", icon: HelpCircle },
+  ];
 
   // Cierra el drawer en móvil cuando se navega
   useEffect(() => {
@@ -68,6 +103,26 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push("/"); // Redirigir al home
+  };
+
+  // Función para manejar submenús expandidos
+  const toggleSubmenu = (label: string) => {
+    setExpandedMenus((prev) =>
+      prev.includes(label)
+        ? prev.filter((item) => item !== label)
+        : [...prev, label]
+    );
+  };
+
+  // Verificar si un submenú está activo
+  const isSubmenuActive = (
+    submenu: {
+      href: string;
+      label: string;
+      icon: React.ComponentType<{ className?: string }>;
+    }[]
+  ) => {
+    return submenu.some((item) => pathname === item.href);
   };
 
   return (
@@ -116,23 +171,79 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
 
         {/* Navegación principal */}
         <nav className="mt-4 space-y-1">
-          {NAV.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href;
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition
-                  ${
-                    active
-                      ? "bg-purple-600 text-white"
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                  }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{label}</span>
-              </Link>
-            );
+          {NAV.map((item) => {
+            const { href, label, icon: Icon, submenu } = item;
+
+            if (submenu) {
+              // Elemento con submenú
+              const isExpanded = expandedMenus.includes(label);
+              const hasActiveSubmenu = isSubmenuActive(submenu);
+
+              return (
+                <div key={label}>
+                  <button
+                    onClick={() => toggleSubmenu(label)}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition
+                      ${
+                        hasActiveSubmenu
+                          ? "bg-purple-600 text-white"
+                          : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="flex-1 text-left">{label}</span>
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </button>
+
+                  {/* Submenú */}
+                  {isExpanded && (
+                    <div className="ml-4 mt-1 space-y-1 border-l border-slate-700 pl-4">
+                      {submenu.map((subItem) => {
+                        const subActive = pathname === subItem.href;
+                        return (
+                          <Link
+                            key={subItem.href}
+                            href={subItem.href}
+                            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition
+                              ${
+                                subActive
+                                  ? "bg-purple-500 text-white"
+                                  : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                              }`}
+                          >
+                            <subItem.icon className="h-3 w-3" />
+                            <span>{subItem.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            } else if (href) {
+              // Elemento simple con href
+              const active = pathname === href;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition
+                    ${
+                      active
+                        ? "bg-purple-600 text-white"
+                        : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                    }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{label}</span>
+                </Link>
+              );
+            }
+            return null;
           })}
         </nav>
 

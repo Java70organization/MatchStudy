@@ -42,13 +42,6 @@ export default function Topbar({ onToggle }: { onToggle: () => void }) {
         </button>
       </div>
 
-      {/* Centro: Título */}
-      <div className="flex-1 flex justify-center lg:justify-start lg:ml-4">
-        <span className="text-sm text-slate-300 font-medium">
-          Panel de Control
-        </span>
-      </div>
-
       {/* Lado derecho: Información del usuario */}
       <div className="flex items-center gap-3 lg:flex-shrink-0 pr-4 lg:pr-8">
         <span className="text-sm text-slate-300 hidden sm:block">

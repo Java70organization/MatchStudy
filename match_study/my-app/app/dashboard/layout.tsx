@@ -18,6 +18,7 @@ export default function DashboardLayout({
 
         {/* Contenido */}
         <div className="flex min-h-[100dvh] flex-1 flex-col">
+          {/* Topbar */}
           <Topbar onToggle={() => setOpen((v) => !v)} />
 
           {/* Contenedor centrado y responsivo */}
