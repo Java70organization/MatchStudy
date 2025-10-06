@@ -3,7 +3,11 @@ import { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -13,11 +17,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Sidebar open={open} setOpen={setOpen} />
 
         {/* Contenido */}
-        <div className="flex min-h-[100dvh] flex-1 flex-col lg:ml-72">
+        <div className="flex min-h-[100dvh] flex-1 flex-col">
+          {/* Topbar */}
           <Topbar onToggle={() => setOpen((v) => !v)} />
 
           {/* Contenedor centrado y responsivo */}
-          <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <main className="flex-1 w-full px-4 py-6 sm:px-6 lg:px-8">
             {children}
           </main>
         </div>

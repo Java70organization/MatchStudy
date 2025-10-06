@@ -1,30 +1,104 @@
-import { Card, QuickLink } from "../../components/ui";
+"use client";
+
+import Image from "next/image";
+import { Users, BookOpen, Video, Target } from "lucide-react";
 
 export default function LobbyPage() {
   return (
-    <section className="space-y-6">
-      <h1 className="text-3xl md:text-4xl font-extrabold">Lobby</h1>
-      <p className="text-slate-300 max-w-2xl">
-        Bienvenido 👋 Aquí verás un resumen rápido de tu actividad: próximas asesorías, mensajes recientes y atajos a lo más usado.
-      </p>
+    <section className="space-y-8">
+      {/* Presentación de MatchStudy */}
+      <div className="text-center space-y-6">
+        <div className="flex justify-center mb-6">
+          <Image
+            src="https://lksruyrnhqwvkwaacwjq.supabase.co/storage/v1/object/public/Imagenes/logo.png"
+            alt="MatchStudy Logo"
+            width={150}
+            height={150}
+            className="rounded-2xl shadow-2xl border-4 border-purple-500/30 hover:border-purple-400/50 transition-all duration-300 hover:scale-105"
+            priority
+          />
+        </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card title="Próximas asesorías">
-          <ul className="space-y-2 text-sm text-slate-300">
-            <li>No tienes sesiones hoy.</li>
-            <li className="opacity-60">Conecta tu calendario para ver más.</li>
-          </ul>
-        </Card>
-        <Card title="Mensajes">
-          <div className="text-sm text-slate-300">No hay mensajes nuevos.</div>
-        </Card>
-        <Card title="Accesos rápidos">
-          <div className="flex flex-wrap gap-2">
-            <QuickLink href="/asesorias" label="Buscar asesorías" />
-            <QuickLink href="/perfil" label="Ver perfil" />
-            <QuickLink href="/perfil/configuracion" label="Editar perfil" />
+        <div className="space-y-4">
+          <h1 className="text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Bienvenido a MatchStudy
+          </h1>
+          <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
+            Tu plataforma integral para conectar con compañeros de estudio,
+            compartir conocimientos y organizar sesiones colaborativas de
+            aprendizaje.
+          </p>
+        </div>
+
+        {/* Características principales */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+          <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-purple-600/20 rounded-lg">
+                <Video className="h-6 w-6 text-purple-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">
+                Videollamadas
+              </h3>
+            </div>
+            <p className="text-slate-300 text-sm">
+              Conéctate en tiempo real con tus compañeros para sesiones de
+              estudio colaborativas.
+            </p>
           </div>
-        </Card>
+
+          <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-green-600/20 rounded-lg">
+                <BookOpen className="h-6 w-6 text-green-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Biblioteca</h3>
+            </div>
+            <p className="text-slate-300 text-sm">
+              Comparte y accede a materiales de estudio, apuntes y recursos
+              educativos.
+            </p>
+          </div>
+
+          <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-blue-600/20 rounded-lg">
+                <Users className="h-6 w-6 text-blue-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Comunidad</h3>
+            </div>
+            <p className="text-slate-300 text-sm">
+              Encuentra Feeds con intereses similares y forma grupos de estudio
+              mediante la comunidad de MatchStudy.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Consejos para empezar */}
+      <div className="bg-gradient-to-r from-purple-900/20 to-pink-900/20 rounded-2xl p-6 border border-purple-500/20">
+        <div className="flex items-center gap-3 mb-4">
+          <Target className="h-6 w-6 text-purple-400" />
+          <h2 className="text-xl font-semibold text-white">
+            ¿Qué puedo realizar en MatchStudy?
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div className="space-y-2">
+            <h3 className="font-medium text-purple-300">
+              Para la comunidad MatchStudy:
+            </h3>
+            <ul className="space-y-1 text-slate-300">
+              <li>• Comparte Feeds entre la comunidad</li>
+              <li>• Busca Feeds entre la comunidad de tu interés</li>
+              <li>• Crea Salas de asesorías entre la comunidad</li>
+              <li>• Busca Salas de asesorías de tu interés</li>
+              <li>• Comparte materiales en la biblioteca</li>
+              <li>• Busca materiales de tu interés</li>
+              <li>• Puedes consultar nuestro calendario de actividades</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </section>
   );
