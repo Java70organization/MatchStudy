@@ -21,20 +21,7 @@ const Header = () => (
       </div>
 
       {/* Navegación centrada */}
-      <nav className="flex-1 flex items-center justify-center gap-8">
-        <a
-          href="#features"
-          className="text-gray-300 hover:text-purple-400 transition-colors font-semibold"
-        >
-          Características
-        </a>
-        <a
-          href="#contact"
-          className="text-gray-300 hover:text-purple-400 transition-colors font-semibold"
-        >
-          Contacto
-        </a>
-      </nav>
+      <nav className="flex-1 flex items-center justify-center gap-8"></nav>
 
       {/* Botón de login a la derecha */}
       <div className="flex items-center">

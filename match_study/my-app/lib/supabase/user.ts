@@ -1,93 +1,157 @@
+// Funciones para manejo de usuarios en tabla personalizada
+
 export type DBUser = {
   id: number;
-  authId: string;
+  createdAt: string; // Supabase maneja automáticamente con now()
+  nombres: string;
+  apellidos: string;
   email: string;
-  displayName: string;
-  phone: string | null;
-  userType: string; // ej. "student" | "tutor"
-  createdAt: string;
-  photoUrl: string | null;
-  university: string | null;
+  telefono: string | null;
+  universidad: string | null;
+  urlFoto: string | null;
 };
 
 /**
- * Crea (si no existe) la fila en public.User para el usuario autenticado.
+ * Verifica si el usuario ya tiene un perfil en la tabla usuarios por email
  */
-/*export async function ensureUserRow(
-  params: {
-    authId: string;
-    email: string;
-    displayName: string;
-    userType: string;
-    photoUrl?: string | null;
-    university?: string | null;
-  }
-): Promise<DBUser> {
-  const { supabase } = await import("./client");
-
-  // ¿Ya existe?
-  const { data: existing, error: selErr } = await supabase
-    .from("User")
-    .select("*")
-    .eq("authId", params.authId)
-    .maybeSingle();
-
-  if (selErr) throw selErr;
-  if (existing) return existing as DBUser;
-
-  const { data, error } = await supabase
-    .from("User")
-    .insert({
-      authId: params.authId,
-      email: params.email,
-      displayName: params.displayName,
-      userType: params.userType,
-      createdAt: new Date().toISOString(),
-      photoUrl: params.photoUrl ?? null,
-      university: params.university ?? null,
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data as DBUser;
-}
-  */
-// /lib/user.ts
-export async function ensureUserRow(params: {
-  email: string;
-  displayName: string;
-  phone?: string | null;
-  userType: string;
-  photoUrl?: string | null;
-  university?: string | null;
-}) {
+export async function checkUserProfile(email: string): Promise<DBUser | null> {
   const { supabase } = await import("@/lib/supabase/client");
 
-  // si ya existe, regresa
-  const { data: me, error: selErr } = await supabase
-    .from("User")
-    .select("*")
-    .eq("email", params.email)
-    .maybeSingle();
-  if (selErr) throw selErr;
-  if (me) return me;
+  try {
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("email", email)
+      .maybeSingle();
 
-  // insert SIN authId: el trigger lo asigna
-  const { data, error } = await supabase
-    .from("User")
-    .insert({
+    if (error) {
+      console.error("Error verificando perfil de usuario:", error.message);
+      return null;
+    }
+
+    return data as DBUser | null;
+  } catch (error) {
+    console.error("Error general en checkUserProfile:", error);
+    return null;
+  }
+}
+
+/**
+ * Crea un nuevo perfil de usuario en la tabla usuarios
+ */
+export async function createUserProfile(params: {
+  nombres: string;
+  apellidos: string;
+  email: string;
+  telefono?: string | null;
+  universidad?: string | null;
+  urlFoto?: string | null;
+}): Promise<DBUser | null> {
+  const { supabase } = await import("@/lib/supabase/client");
+
+  try {
+    // Verificar que hay un usuario autenticado
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error(
+        "No hay usuario autenticado para crear perfil:",
+        authError?.message
+      );
+      return null;
+    }
+
+    console.log("Creando perfil para usuario autenticado:", user.email);
+
+    // Verificar que el email coincida con el usuario autenticado
+    if (user.email !== params.email) {
+      console.error("El email no coincide con el usuario autenticado");
+      console.error(
+        "Usuario auth:",
+        user.email,
+        "Email enviado:",
+        params.email
+      );
+      return null;
+    }
+
+    const insertData = {
+      nombres: params.nombres,
+      apellidos: params.apellidos,
       email: params.email,
-      displayName: params.displayName,
-      phone: params.phone ?? null,
-      userType: params.userType,
-      createdAt: new Date().toISOString(),
-      photoUrl: params.photoUrl ?? null,
-      university: params.university ?? null,
-    })
-    .select()
-    .single();
+      telefono: params.telefono ?? null,
+      universidad: params.universidad ?? null,
+      urlFoto: params.urlFoto ?? null,
+    };
 
-  if (error) throw error;
-  return data;
+    console.log("Datos a insertar:", insertData);
+    console.log("Token de usuario:", await supabase.auth.getSession());
+
+    const { data, error } = await supabase
+      .from("usuarios")
+      .insert(insertData)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creando perfil de usuario:", error.message);
+      console.error("Código de error:", error.code);
+      console.error("Detalles del error:", error.details);
+      console.error("Hint:", error.hint);
+      console.error("Datos enviados:", insertData);
+
+      // Información adicional sobre RLS
+      if (error.message.includes("row-level security")) {
+        console.error(
+          "PROBLEMA RLS: Verifica las políticas de la tabla usuarios en Supabase"
+        );
+        console.error("Usuario actual:", user.id, user.email);
+      }
+
+      return null;
+    }
+
+    console.log("Perfil creado exitosamente:", data);
+    return data as DBUser;
+  } catch (error) {
+    console.error("Error general en createUserProfile:", error);
+    return null;
+  }
+}
+
+/**
+ * Función alternativa para crear perfil usando el cliente del servidor
+ * Útil si hay problemas con RLS en el cliente
+ */
+export async function createUserProfileServerSide(params: {
+  nombres: string;
+  apellidos: string;
+  email: string;
+  telefono?: string | null;
+  universidad?: string | null;
+  urlFoto?: string | null;
+}): Promise<{ success: boolean; data?: DBUser; error?: string }> {
+  try {
+    const response = await fetch("/api/create-user-profile", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: result.error || "Error desconocido" };
+    }
+
+    return { success: true, data: result.data };
+  } catch (error) {
+    console.error("Error en createUserProfileServerSide:", error);
+    return { success: false, error: "Error de conexión" };
+  }
 }

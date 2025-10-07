@@ -1,6 +1,6 @@
 "use client";
 
-import Header from "@/app/components/Header"; // ajusta la ruta a tus componentes
+import Header from "@/app/components/Header";
 import Footer from "@/app/components/Footer";
 import { FormEvent, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -23,25 +23,14 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      // Opcional: traer tu fila de public.User (si usas esa tabla en tu app)
-      // Tip: También podrías usar ensureUserRow si deseas crearla al primer login.
-      const authId = data.user?.id;
-      if (authId) {
-        const { data: dbUser, error: dbErr } = await supabase
-          .from("User")
-          .select("*")
-          .eq("authId", authId)
-          .maybeSingle();
-        if (dbErr) throw dbErr;
-        // Aquí podrías redirigir según userType o guardar en estado global
-        console.log("DB User:", dbUser);
-      }
+      // Usuario autenticado exitosamente con Supabase Auth
+      console.log("Usuario autenticado:", data.user?.email);
 
-      // Redirección post-login (ajusta la ruta según tu app)
-      window.location.href = "../../dashboard/lobby"; // por ejemplo al dashboard
+      // Redirección directa al dashboard
+      window.location.href = "/dashboard/lobby";
     } catch (err: unknown) {
-       const msg = err instanceof Error ? err.message : String(err);
-       setErrorMsg(msg || "Error al iniciar sesión"); // o "Error al registrar"
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(msg || "Error al iniciar sesión"); // o "Error al registrar"
     }
   };
 
@@ -50,7 +39,7 @@ export default function LoginPage() {
       <Header />
       <main className="flex flex-col items-center justify-center text-center px-4 py-32 md:py-48 bg-gradient-to-br from-slate-950 to-gray-900">
         <h1 className="text-5xl md:text-6xl font-extrabold text-white mb-6">
-          Inicia Sesión 🚀
+          Inicia Sesión
         </h1>
         <p className="text-lg md:text-xl text-gray-400 mb-8 max-w-2xl">
           Accede a tu cuenta de MatchStudy.
@@ -83,11 +72,9 @@ export default function LoginPage() {
           >
             {loading ? "Entrando..." : "Iniciar Sesión"}
           </button>
-          {errorMsg && (
-            <p className="text-red-400 text-sm">{errorMsg}</p>
-          )}
+          {errorMsg && <p className="text-red-400 text-sm">{errorMsg}</p>}
           <p className="text-gray-400 text-sm">
-            ¿No tienes cuenta? {" "}
+            ¿No tienes cuenta?{" "}
             <a href="./registro" className="text-purple-400 hover:underline">
               Regístrate
             </a>

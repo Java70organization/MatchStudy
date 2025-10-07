@@ -3,10 +3,9 @@ import Header from "@/app/components/Header";
 import Footer from "@/app/components/Footer";
 import { FormEvent, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { ensureUserRow } from "@/lib/supabase/user";
+
 function isValidEmail(s: string) {
   const email = s.trim().toLowerCase();
-  // formato básico y sin espacios
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
@@ -14,9 +13,6 @@ export default function RegistroPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [userType, setUserType] = useState("student");
-  const [university, setUniversity] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -42,30 +38,22 @@ export default function RegistroPage() {
       return;
     }
 
-    if (!university.trim()) {
-      setErrorMsg("La universidad es requerida.");
-      return;
-    }
-
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
         email: emailClean,
         password,
         options: {
-          // quítalo si no usas deep-link de confirmación:
           emailRedirectTo:
             typeof window !== "undefined"
               ? `${window.location.origin}/auth/callback`
               : undefined,
           data: {
             full_name: displayName,
-            phone: phone,
-            user_type: userType,
-            university: university,
           },
         },
       });
+
       if (error) throw error;
 
       const authUser = data.user;
@@ -76,49 +64,22 @@ export default function RegistroPage() {
           `¡Registro exitoso! Se ha enviado un correo de verificación a ${emailClean}. Por favor, revisa tu bandeja de entrada y haz clic en el enlace de confirmación antes de iniciar sesión.`
         );
 
-        // Intentar crear el perfil de usuario, pero no bloquear si falla
-        try {
-          await ensureUserRow({
-            email: emailClean,
-            displayName,
-            phone: phone,
-            userType,
-            university: university,
-            photoUrl: null,
-          });
-        } catch (profileError) {
-          console.log(
-            "Error al crear perfil, se intentará nuevamente al confirmar email:",
-            profileError
-          );
-        }
-
-        // Redirigir después de 5 segundos para que el usuario lea el mensaje
         setTimeout(() => {
           window.location.href = "/auth/login";
         }, 5000);
       } else if (authUser) {
-        // Usuario confirmado inmediatamente (email confirmation deshabilitado)
-        await ensureUserRow({
-          email: emailClean,
-          displayName,
-          phone: phone,
-          userType,
-          university: university,
-          photoUrl: null,
-        });
-
+        // Usuario confirmado inmediatamente
         setSuccessMsg("¡Registro exitoso! Redirigiendo al login...");
+
         setTimeout(() => {
           window.location.href = "/auth/login";
         }, 2000);
       } else {
-        throw new Error("No se recibió el usuario de Auth");
+        throw new Error("No se pudo crear el usuario.");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      //const msg = String(err?.message || "");
-      // mensajes más amigables
+
       if (/already registered/i.test(msg)) {
         setErrorMsg("Ese correo ya está registrado. Intenta iniciar sesión.");
       } else if (/rate limit/i.test(msg)) {
@@ -138,7 +99,7 @@ export default function RegistroPage() {
       <Header />
       <main className="flex flex-col items-center justify-center text-center px-4 py-24 md:py-36 bg-gradient-to-br from-slate-950 to-gray-900">
         <h1 className="text-5xl md:text-6xl font-extrabold text-white mb-6">
-          Crea tu cuenta ✨
+          Crea tu cuenta
         </h1>
         <p className="text-lg md:text-xl text-gray-400 mb-8 max-w-2xl">
           Regístrate para empezar a usar MatchStudy.
@@ -162,7 +123,7 @@ export default function RegistroPage() {
             type="email"
             placeholder="Correo electrónico"
             value={email}
-            onChange={(e) => setEmail(e.target.value.replace(/\s/g, ""))} // ← sin espacios
+            onChange={(e) => setEmail(e.target.value.replace(/\s/g, ""))}
             className="px-4 py-3 rounded-lg bg-slate-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-600"
             required
             autoComplete="email"
@@ -178,34 +139,6 @@ export default function RegistroPage() {
             required
             minLength={6}
             autoComplete="new-password"
-          />
-
-          <input
-            type="tel"
-            placeholder="Teléfono"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="px-4 py-3 rounded-lg bg-slate-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-600"
-            autoComplete="tel"
-          />
-
-          <select
-            value={userType}
-            onChange={(e) => setUserType(e.target.value)}
-            className="px-4 py-3 rounded-lg bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-purple-600"
-          >
-            <option value="student">Estudiante</option>
-            <option value="tutor">Tutor</option>
-          </select>
-
-          <input
-            type="text"
-            placeholder="Universidad"
-            value={university}
-            onChange={(e) => setUniversity(e.target.value)}
-            className="px-4 py-3 rounded-lg bg-slate-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-600"
-            required
-            autoComplete="organization"
           />
 
           <button

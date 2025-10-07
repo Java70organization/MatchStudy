@@ -2,8 +2,64 @@
 
 import Image from "next/image";
 import { Users, BookOpen, Video, Target } from "lucide-react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
+import { checkUserProfile } from "@/lib/supabase/user";
 
 export default function LobbyPage() {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkUserProfileOnLoad = async () => {
+      try {
+        // Verificar si hay usuario autenticado
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError || !user) {
+          // No hay usuario autenticado, redirigir al login
+          window.location.href = "/auth/login";
+          return;
+        }
+
+        const userEmail = user.email;
+        if (userEmail) {
+          // Verificar si el usuario tiene perfil en la tabla usuarios
+          const userProfile = await checkUserProfile(userEmail);
+
+          if (!userProfile) {
+            // No tiene perfil, redirigir a completar perfil
+            console.log("Usuario sin perfil, redirigiendo a completar perfil");
+            window.location.href = "/auth/completar-perfil";
+            return;
+          }
+
+          console.log("Usuario con perfil existente:", userProfile);
+        }
+      } catch (error) {
+        console.error("Error verificando perfil:", error);
+        // En caso de error, permitir continuar al dashboard
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkUserProfileOnLoad();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div>
+          <p className="text-slate-300">Verificando perfil...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section className="space-y-8">
       {/* Presentación de MatchStudy */}
