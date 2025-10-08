@@ -19,7 +19,6 @@ type UIMessage = {
   createdAt: string; // ISO
 };
 
-
 export default function MensajesPage() {
   // Usuario actual (para alinear mensajes y filtrar en sidebar)
   const [selfId, setSelfId] = useState<string | null>(null);
@@ -33,7 +32,6 @@ export default function MensajesPage() {
 
   // Conversación seleccionada
   const [selected, setSelected] = useState<UIUser | null>(null);
-  const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -73,9 +71,10 @@ export default function MensajesPage() {
     const base = users.filter((u) => (u.email ?? "").toLowerCase() !== se);
     const t = qs.trim().toLowerCase();
     if (!t) return base;
-    return base.filter((u) =>
-      `${u.nombres} ${u.apellidos}`.toLowerCase().includes(t) ||
-      (u.email ?? "").toLowerCase().includes(t)
+    return base.filter(
+      (u) =>
+        `${u.nombres} ${u.apellidos}`.toLowerCase().includes(t) ||
+        (u.email ?? "").toLowerCase().includes(t)
     );
   }, [users, qs, selfEmail]);
 
@@ -90,7 +89,9 @@ export default function MensajesPage() {
     setSelected(u);
     setMessages([]);
     // Confirmación antes de crear/conectar conversación
-    const ok = window.confirm(`¿Quieres iniciar una conversación con ${u.nombres} ${u.apellidos}?`);
+    const ok = window.confirm(
+      `¿Quieres iniciar una conversación con ${u.nombres} ${u.apellidos}?`
+    );
     if (!ok) return;
     try {
       const res = await fetch("/api/conversations", {
@@ -101,13 +102,14 @@ export default function MensajesPage() {
       });
       const json = await res.json();
       if (res.ok) {
+        // Conversación creada exitosamente
         const convId = json.data?.id as string | undefined;
-        setConversationId(convId ?? null);
+        console.log("Conversación creada:", convId);
       } else {
-        setConversationId(null);
+        console.log("Error creando conversación");
       }
     } catch {
-      setConversationId(null);
+      console.log("Error en solicitud de conversación");
     }
   };
 
@@ -119,7 +121,12 @@ export default function MensajesPage() {
       const now = new Date().toISOString();
       setMessages((prev) => [
         ...prev,
-        { id: now, senderId: selfId || "self", body: body.trim(), createdAt: now },
+        {
+          id: now,
+          senderId: selfId || "self",
+          body: body.trim(),
+          createdAt: now,
+        },
       ]);
       setBody("");
       // FUTURO: await fetch('/api/messages', { method: 'POST', body: JSON.stringify({ conversationId, body }) })
@@ -158,32 +165,38 @@ export default function MensajesPage() {
             {!loadingUsers && !uerr && filtered.length === 0 && (
               <p className="text-slate-400 py-2">Sin usuarios</p>
             )}
-            {!loadingUsers && !uerr && filtered.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => onSelect(u)}
-                className={`w-full flex items-center gap-3 py-3 hover:bg-slate-800/60 px-2 rounded-lg text-left ${
-                  selected?.id === u.id ? "bg-slate-800/80" : ""
-                }`}
-              >
-                {u.urlFoto ? (
-                  <img
-                    src={u.urlFoto}
-                    alt={u.nombres}
-                    className="w-10 h-10 rounded-full object-cover border border-slate-700"
-                    onError={(e) => ((e.currentTarget.style.display = "none"))}
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300">
-                    {(u.nombres || u.email || "U").charAt(0).toUpperCase()}
+            {!loadingUsers &&
+              !uerr &&
+              filtered.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => onSelect(u)}
+                  className={`w-full flex items-center gap-3 py-3 hover:bg-slate-800/60 px-2 rounded-lg text-left ${
+                    selected?.id === u.id ? "bg-slate-800/80" : ""
+                  }`}
+                >
+                  {u.urlFoto ? (
+                    <img
+                      src={u.urlFoto}
+                      alt={u.nombres}
+                      className="w-10 h-10 rounded-full object-cover border border-slate-700"
+                      onError={(e) => (e.currentTarget.style.display = "none")}
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300">
+                      {(u.nombres || u.email || "U").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white font-medium truncate">
+                      {u.nombres} {u.apellidos}
+                    </div>
+                    <div className="text-slate-400 text-xs truncate">
+                      {u.email}
+                    </div>
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="text-white font-medium truncate">{u.nombres} {u.apellidos}</div>
-                  <div className="text-slate-400 text-xs truncate">{u.email}</div>
-                </div>
-              </button>
-            ))}
+                </button>
+              ))}
           </div>
         </aside>
 
@@ -201,30 +214,45 @@ export default function MensajesPage() {
                   />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300">
-                    {(selected.nombres || selected.email || "U").charAt(0).toUpperCase()}
+                    {(selected.nombres || selected.email || "U")
+                      .charAt(0)
+                      .toUpperCase()}
                   </div>
                 )}
                 <div>
-                  <div className="text-white font-semibold">{selected.nombres} {selected.apellidos}</div>
+                  <div className="text-white font-semibold">
+                    {selected.nombres} {selected.apellidos}
+                  </div>
                   <div className="text-slate-400 text-xs">{selected.email}</div>
                 </div>
               </>
             ) : (
-              <div className="text-slate-400">Selecciona un usuario para chatear</div>
+              <div className="text-slate-400">
+                Selecciona un usuario para chatear
+              </div>
             )}
           </div>
 
           {/* Lista de mensajes */}
           <div ref={listRef} className="flex-1 overflow-y-auto space-y-3 pr-1">
             {selected && messages.length === 0 && (
-              <p className="text-slate-400">Aún no hay mensajes. ¡Escribe el primero!</p>
+              <p className="text-slate-400">
+                Aún no hay mensajes. ¡Escribe el primero!
+              </p>
             )}
             {messages.map((m) => (
-              <div key={m.id} className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${
-                m.senderId === selfId ? "ml-auto bg-purple-600 text-white" : "bg-slate-800 text-slate-200"
-              }`}>
+              <div
+                key={m.id}
+                className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${
+                  m.senderId === selfId
+                    ? "ml-auto bg-purple-600 text-white"
+                    : "bg-slate-800 text-slate-200"
+                }`}
+              >
                 <div className="whitespace-pre-wrap">{m.body}</div>
-                <div className="text-[10px] opacity-70 mt-1">{new Date(m.createdAt).toLocaleTimeString()}</div>
+                <div className="text-[10px] opacity-70 mt-1">
+                  {new Date(m.createdAt).toLocaleTimeString()}
+                </div>
               </div>
             ))}
           </div>
@@ -234,11 +262,18 @@ export default function MensajesPage() {
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder={selected ? "Escribe un mensaje..." : "Selecciona un usuario"}
+                placeholder={
+                  selected ? "Escribe un mensaje..." : "Selecciona un usuario"
+                }
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 disabled={!selected}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    onSend();
+                  }
+                }}
                 className="flex-1 px-3 py-2 rounded-lg bg-slate-800/70 border border-slate-700/70 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-60"
               />
               <button
