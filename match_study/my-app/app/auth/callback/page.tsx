@@ -3,6 +3,9 @@
 import { useEffect, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabase/client";
 
+
+import { ensureUserRow } from "@/lib/supabase/user";
+
 import { CheckCircle, XCircle, Clock, Mail, Sparkles } from "lucide-react";
 
 function AuthCallbackContent() {
@@ -39,7 +42,11 @@ function AuthCallbackContent() {
         } = await supabase.auth.getSession();
 
         if (session?.user) {
+
           await processSuccessfulAuth();
+
+          await processSuccessfulAuth(session.user);
+
           return;
         }
 
@@ -56,7 +63,11 @@ function AuthCallbackContent() {
           }
 
           if (data.user) {
+
             await processSuccessfulAuth();
+
+            await processSuccessfulAuth(data.user);
+
             return;
           }
         }
@@ -75,7 +86,11 @@ function AuthCallbackContent() {
           }
 
           if (data.user) {
+
             await processSuccessfulAuth();
+
+            await processSuccessfulAuth(data.user);
+
             return;
           }
         }
@@ -96,6 +111,34 @@ function AuthCallbackContent() {
       setMessage(
         "¡Tu email ha sido confirmado exitosamente! Tu cuenta está ahora activa y puedes acceder a todas las funciones de MatchStudy. Haz clic en el botón de abajo para iniciar sesión."
       );
+
+    const processSuccessfulAuth = async (user: {
+      user_metadata?: Record<string, unknown>;
+      email?: string;
+    }) => {
+      try {
+        const metadata = user.user_metadata || {};
+        await ensureUserRow({
+          email: user.email || "",
+          displayName:
+            (metadata.full_name as string) || user.email?.split("@")[0] || "",
+          phone: (metadata.phone as string) || "",
+          userType: (metadata.user_type as string) || "student",
+          university: (metadata.university as string) || "",
+          photoUrl: (metadata.avatar_url as string) || null,
+        });
+
+        setStatus("success");
+        setMessage(
+          "¡Tu email ha sido confirmado exitosamente! Tu cuenta está ahora activa y puedes acceder a todas las funciones de MatchStudy. Haz clic en el botón de abajo para iniciar sesión."
+        );
+      } catch {
+        setStatus("success");
+        setMessage(
+          "Email confirmado exitosamente. Tu cuenta está activa. Inicia sesión para completar tu perfil y comenzar a usar MatchStudy."
+        );
+      }
+
     };
 
     handleAuthCallback();

@@ -13,6 +13,11 @@ export default function RegistroPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+
+  const [phone, setPhone] = useState("");
+  const [userType, setUserType] = useState("student");
+  const [university, setUniversity] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -37,6 +42,13 @@ export default function RegistroPage() {
       setErrorMsg("El nombre a mostrar es requerido.");
       return;
     }
+
+
+    if (!university.trim()) {
+      setErrorMsg("La universidad es requerida.");
+      return;
+    }
+
 
     setLoading(true);
     try {
