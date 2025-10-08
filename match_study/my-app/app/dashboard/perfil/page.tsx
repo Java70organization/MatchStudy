@@ -18,6 +18,7 @@ export default function PerfilPage() {
     apellidos: "",
     telefono: "",
     universidad: "",
+    displayName: "",
   });
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
@@ -44,11 +45,16 @@ export default function PerfilPage() {
 
           if (profile) {
             setUserProfile(profile);
+            // Derivar displayName desde metadata de auth o desde nombres/apellidos
+            const authDisplay =
+              (user.user_metadata?.full_name as string | undefined) ||
+              `${profile.nombres || ""} ${profile.apellidos || ""}`.trim();
             setForm({
               nombres: profile.nombres || "",
               apellidos: profile.apellidos || "",
               telefono: profile.telefono || "",
               universidad: profile.universidad || "",
+              displayName: authDisplay || "",
             });
             if (profile.urlFoto) {
               try {
@@ -176,6 +182,24 @@ export default function PerfilPage() {
                 />
               </div>
             </div>
+            {/* Nombre a mostrar en MatchStudy */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Nombre a mostrar en MatchStudy
+              </label>
+              <input
+                type="text"
+                value={form.displayName}
+                onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
+                readOnly={!editing}
+                placeholder="Nombre a mostrar en MatchStudy"
+                className={`w-full px-3 py-2 border rounded-lg text-white ${
+                  editing
+                    ? "bg-slate-800/50 border-slate-600"
+                    : "bg-slate-800/50 border-slate-700/50 cursor-not-allowed"
+                }`}
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
                 Email
@@ -279,6 +303,7 @@ export default function PerfilPage() {
                             apellidos: form.apellidos,
                             telefono: form.telefono,
                             universidad: form.universidad,
+                            displayName: form.displayName,
                           }),
                         });
                         const data = await res.json();
@@ -299,6 +324,14 @@ export default function PerfilPage() {
                         );
                         setSaveMsg("Cambios guardados correctamente");
                         setEditing(false);
+                        // Notificar a Sidebar/Topbar para refrescar el display name sin recargar
+                        if (typeof window !== "undefined" && form.displayName.trim()) {
+                          window.dispatchEvent(
+                            new CustomEvent("display-name-updated", {
+                              detail: { full_name: form.displayName.trim() },
+                            }),
+                          );
+                        }
                       } catch (e) {
                         setSaveMsg(
                           e instanceof Error ? e.message : "Error al guardar"
@@ -316,14 +349,16 @@ export default function PerfilPage() {
                     onClick={() => {
                       setEditing(false);
                       setSaveMsg(null);
-                      if (userProfile) {
-                        setForm({
-                          nombres: userProfile.nombres || "",
-                          apellidos: userProfile.apellidos || "",
-                          telefono: userProfile.telefono || "",
-                          universidad: userProfile.universidad || "",
-                        });
-                      }
+                        if (userProfile) {
+                          const fallbackDisplay = `${userProfile.nombres || ""} ${userProfile.apellidos || ""}`.trim();
+                          setForm({
+                            nombres: userProfile.nombres || "",
+                            apellidos: userProfile.apellidos || "",
+                            telefono: userProfile.telefono || "",
+                            universidad: userProfile.universidad || "",
+                            displayName: fallbackDisplay,
+                          });
+                        }
                     }}
                     className="bg-slate-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg hover:bg-slate-600 transition-colors"
                   >

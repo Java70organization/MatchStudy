@@ -55,15 +55,19 @@ export async function GET() {
       (feeds ?? []).map(async (f: FeedRow) => {
         let universidad: string | null = null;
         let avatar_url: string | null = null;
+        let nombres: string | null = null;
+        let apellidos: string | null = null;
         if (f.email) {
           const { data: u } = await admin
             .from("usuarios")
-            .select("universidad, urlFoto")
+            .select("nombres, apellidos, universidad, urlFoto")
             .eq("email", f.email)
             .maybeSingle();
           if (u) {
             universidad = u.universidad ?? null;
-            const key = extractObjectKey(u.urlFoto ?? null);
+            nombres = (u.nombres as string | null) ?? null;
+            apellidos = (u.apellidos as string | null) ?? null;
+            const key = extractObjectKey((u as { urlFoto?: string | null }).urlFoto ?? null);
             if (key) {
               const { data: signed } = await admin.storage
                 .from(BUCKET)
@@ -72,15 +76,16 @@ export async function GET() {
             }
           }
         }
+        const fullName = `${nombres ?? ""} ${apellidos ?? ""}`.trim();
+        const usuario = fullName || f.usuario;
         return {
           hora: f.hora,
-          usuario: f.usuario,
+          usuario,
           materia: f.materia,
           descripcion: f.descripcion,
           likes: 0,
           universidad,
           avatar_url,
-          display_name: f.usuario, // displayname desde feeds.usuario
         };
       }),
     );

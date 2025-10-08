@@ -28,7 +28,22 @@ export async function GET() {
             .createSignedUrl(row.urlmaterial as string, 60 * 60 * 24 * 7);
           downloadUrl = signed?.signedUrl || null;
         }
-        return { ...row, downloadUrl };
+
+        // Enriquecer con nombres y apellidos desde tabla usuarios (si hay email)
+        let usuario = row.usuario as string | null;
+        if (row.email) {
+          const { data: u } = await admin
+            .from("usuarios")
+            .select("nombres, apellidos")
+            .eq("email", row.email as string)
+            .maybeSingle();
+          if (u) {
+            const full = `${(u.nombres as string | null) ?? ""} ${(u.apellidos as string | null) ?? ""}`.trim();
+            if (full) usuario = full;
+          }
+        }
+
+        return { ...row, usuario, downloadUrl };
       }),
     );
 
@@ -38,4 +53,3 @@ export async function GET() {
     return NextResponse.json({ error: `Error interno: ${msg}` }, { status: 500 });
   }
 }
-

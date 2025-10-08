@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { MessageSquare, Search, SendHorizontal } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { MessageSquare, Search } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 
 type UIUser = {
@@ -12,50 +12,65 @@ type UIUser = {
   urlFoto: string | null;
 };
 
-type UIMessage = {
-  id: string | number;
-  senderId: string; // "self" para el usuario actual en este mock
-  body: string;
-  createdAt: string; // ISO
-};
-
 export default function MensajesPage() {
-  // Usuario actual (para alinear mensajes y filtrar en sidebar)
-  const [selfId, setSelfId] = useState<string | null>(null);
-  const [selfEmail, setSelfEmail] = useState<string | null>(null);
+  // Formulario
+  const [email, setEmail] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const [asunto, setAsunto] = useState("");
+  const [sending, setSending] = useState(false);
+  const [ok, setOk] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Usuarios del sidebar
+  // Sidebar usuarios
   const [users, setUsers] = useState<UIUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [uerr, setUerr] = useState<string | null>(null);
   const [qs, setQs] = useState("");
-
-  // Conversación seleccionada
+  const [selfEmail, setSelfEmail] = useState<string | null>(null);
+  const [selfFirst, setSelfFirst] = useState<string>("");
+  const [selfLast, setSelfLast] = useState<string>("");
   const [selected, setSelected] = useState<UIUser | null>(null);
-  const [messages, setMessages] = useState<UIMessage[]>([]);
-  const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
 
-  // Cargar usuario actual
+  // Cargar usuario actual (para excluirlo del listado)
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
-      setSelfId(data.user?.id ?? null);
-      setSelfEmail(data.user?.email ?? null);
+      const em = data.user?.email ?? null;
+      setSelfEmail(em);
+      if (em) {
+        try {
+          const profile = await (await import("@/lib/supabase/user")).checkUserProfile(em);
+          if (profile) {
+            setSelfFirst(profile.nombres || "");
+            setSelfLast(profile.apellidos || "");
+          }
+        } catch {}
+      }
     })();
   }, []);
 
-  // Cargar usuarios registrados (tabla usuarios)
+  // Cargar usuarios registrados (tabla usuarios) con credenciales para RLS
   useEffect(() => {
     const loadUsers = async () => {
       try {
         setLoadingUsers(true);
         setUerr(null);
-        const res = await fetch("/api/users", { cache: "no-store" });
+        const res = await fetch("/api/users", {
+          cache: "no-store",
+          credentials: "include",
+        });
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || "Error cargando usuarios");
-        setUsers((json.data || []) as UIUser[]);
+        const base = (json.data || []) as UIUser[];
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+        const normalized = base.map((u) => {
+          let foto = u.urlFoto;
+          if (foto && !/^https?:\/\//i.test(foto)) {
+            foto = `${supabaseUrl}/storage/v1/object/public/Profile/${foto}`;
+          }
+          return { ...u, urlFoto: foto };
+        });
+        setUsers(normalized);
       } catch (e) {
         setUerr(e instanceof Error ? e.message : "Error cargando usuarios");
       } finally {
@@ -65,7 +80,7 @@ export default function MensajesPage() {
     loadUsers();
   }, []);
 
-  // Búsqueda en sidebar
+  // Filtrado: oculta al usuario actual y busca por nombre/apellido/email
   const filtered = useMemo(() => {
     const se = (selfEmail ?? "").toLowerCase();
     const base = users.filter((u) => (u.email ?? "").toLowerCase() !== se);
@@ -78,66 +93,64 @@ export default function MensajesPage() {
     );
   }, [users, qs, selfEmail]);
 
-  // Auto-scroll al final cuando cambian mensajes
-  useEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, selected]);
+  const displayNameOf = (u: UIUser) =>
+    `${u.nombres ?? ""} ${u.apellidos ?? ""}`.trim();
 
-  // Seleccionar usuario: confirmar y crear/obtener conversación
-  const onSelect = async (u: UIUser) => {
+  const onSelect = (u: UIUser) => {
     setSelected(u);
-    setMessages([]);
-    // Confirmación antes de crear/conectar conversación
-    const ok = window.confirm(
-      `¿Quieres iniciar una conversación con ${u.nombres} ${u.apellidos}?`
-    );
-    if (!ok) return;
-    try {
-      const res = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ userId: u.id }),
-      });
-      const json = await res.json();
-      if (res.ok) {
-        // Conversación creada exitosamente
-        const convId = json.data?.id as string | undefined;
-        console.log("Conversación creada:", convId);
-      } else {
-        console.log("Error creando conversación");
-      }
-    } catch {
-      console.log("Error en solicitud de conversación");
-    }
+    if (u.email) setEmail(u.email);
   };
 
-  // Enviar mensaje (mock local). TODO: persistir en /api/messages
-  const onSend = async () => {
-    if (!selected || !body.trim()) return;
+  const isValidEmail = (v: string) => /.+@.+\..+/.test(v);
+
+  const onEnviar = async () => {
+    setOk(null);
+    setError(null);
+    if (!isValidEmail(email)) {
+      setError("Correo inválido");
+      return;
+    }
+    if (!mensaje.trim()) {
+      setError("El mensaje es requerido");
+      return;
+    }
     try {
       setSending(true);
-      const now = new Date().toISOString();
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: now,
-          senderId: selfId || "self",
-          body: body.trim(),
-          createdAt: now,
-        },
-      ]);
-      setBody("");
-      // FUTURO: await fetch('/api/messages', { method: 'POST', body: JSON.stringify({ conversationId, body }) })
+      const res = await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          to: email,
+          message: mensaje,
+          subject: asunto.trim() || 'Mensaje desde Mensajes',
+          fromEmail: selfEmail,
+          fromFirstName: selfFirst,
+          fromLastName: selfLast,
+        })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error || 'No se pudo enviar');
+      setOk('Mensaje enviado correctamente.');
+      setMensaje('');
+      setAsunto('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error enviando");
     } finally {
       setSending(false);
     }
   };
 
+  const onLimpiar = () => {
+    setEmail("");
+    setMensaje("");
+    setAsunto("");
+    setOk(null);
+    setError(null);
+  };
+
   return (
     <section className="space-y-6">
-      {/* Título */}
       <div className="flex items-center gap-3">
         <MessageSquare className="h-8 w-8 text-purple-400" />
         <h1 className="text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
@@ -145,10 +158,9 @@ export default function MensajesPage() {
         </h1>
       </div>
 
-      {/* Layout principal */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 min-h-[70vh]">
-        {/* Sidebar de usuarios */}
-        <aside className="md:col-span-4 lg:col-span-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        {/* Panel izquierdo: usuarios */}
+        <aside className="md:col-span-5 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
@@ -175,23 +187,11 @@ export default function MensajesPage() {
                     selected?.id === u.id ? "bg-slate-800/80" : ""
                   }`}
                 >
-                  {u.urlFoto ? (
-                    <img
-                      src={u.urlFoto}
-                      alt={u.nombres}
-                      className="w-10 h-10 rounded-full object-cover border border-slate-700"
-                      onError={(e) => (e.currentTarget.style.display = "none")}
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300">
-                      {(u.nombres || u.email || "U").charAt(0).toUpperCase()}
-                    </div>
-                  )}
                   <div className="flex-1 min-w-0">
                     <div className="text-white font-medium truncate">
-                      {u.nombres} {u.apellidos}
+                      {displayNameOf(u)}
                     </div>
-                    <div className="text-slate-400 text-xs truncate">
+                    <div className="text-slate-500 text-[11px] truncate">
                       {u.email}
                     </div>
                   </div>
@@ -200,93 +200,81 @@ export default function MensajesPage() {
           </div>
         </aside>
 
-        {/* Panel de conversación */}
-        <main className="md:col-span-8 lg:col-span-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col">
-          {/* Encabezado de la conversación */}
-          <div className="border-b border-slate-800 pb-3 mb-3 min-h-[44px] flex items-center gap-3">
+        {/* Formulario derecho */}
+        <div className="md:col-span-7 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+          {/* Encabezado dentro del panel */}
+          <div className="border-b border-slate-800 pb-3 mb-3 min-h-[44px] flex items-center">
             {selected ? (
-              <>
-                {selected.urlFoto ? (
-                  <img
-                    src={selected.urlFoto}
-                    alt={selected.nombres}
-                    className="w-10 h-10 rounded-full object-cover border border-slate-700"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300">
-                    {(selected.nombres || selected.email || "U")
-                      .charAt(0)
-                      .toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <div className="text-white font-semibold">
-                    {selected.nombres} {selected.apellidos}
-                  </div>
-                  <div className="text-slate-400 text-xs">{selected.email}</div>
+              <div>
+                <div className="text-xs text-slate-400">Enviando correo a</div>
+                <div className="text-white font-semibold">
+                  {displayNameOf(selected) || selected.email}
                 </div>
-              </>
+                <div className="text-slate-400 text-xs">{selected.email}</div>
+              </div>
             ) : (
-              <div className="text-slate-400">
-                Selecciona un usuario para chatear
+              <div className="text-slate-400 text-sm">
+                Selecciona un usuario para rellenar el correo
               </div>
             )}
           </div>
 
-          {/* Lista de mensajes */}
-          <div ref={listRef} className="flex-1 overflow-y-auto space-y-3 pr-1">
-            {selected && messages.length === 0 && (
-              <p className="text-slate-400">
-                Aún no hay mensajes. ¡Escribe el primero!
-              </p>
-            )}
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${
-                  m.senderId === selfId
-                    ? "ml-auto bg-purple-600 text-white"
-                    : "bg-slate-800 text-slate-200"
-                }`}
-              >
-                <div className="whitespace-pre-wrap">{m.body}</div>
-                <div className="text-[10px] opacity-70 mt-1">
-                  {new Date(m.createdAt).toLocaleTimeString()}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Composer */}
-          <div className="pt-3 mt-3 border-t border-slate-800">
-            <div className="flex items-center gap-2">
+          <h2 className="text-slate-200 font-semibold mb-3">Enviar mensaje</h2>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Asunto</label>
               <input
                 type="text"
-                placeholder={
-                  selected ? "Escribe un mensaje..." : "Selecciona un usuario"
-                }
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                disabled={!selected}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    onSend();
-                  }
-                }}
-                className="flex-1 px-3 py-2 rounded-lg bg-slate-800/70 border border-slate-700/70 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-60"
+                value={asunto}
+                onChange={(e) => setAsunto(e.target.value)}
+                placeholder="Asunto del mensaje"
+                className="w-full px-3 py-2 rounded-lg bg-slate-800/70 border border-slate-700/70 text-white placeholder-gray-400"
               />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">
+                Correo a enviar
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="correo@destino.com"
+                className="w-full px-3 py-2 rounded-lg bg-slate-800/70 border border-slate-700/70 text-white placeholder-gray-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">
+                Mensaje
+              </label>
+              <textarea
+                value={mensaje}
+                onChange={(e) => setMensaje(e.target.value)}
+                placeholder="Escribe tu mensaje..."
+                rows={5}
+                className="w-full px-3 py-2 rounded-lg bg-slate-800/70 border border-slate-700/70 text-white placeholder-gray-400"
+              />
+            </div>
+            {error && <p className="text-sm text-red-400">{error}</p>}
+            {ok && <p className="text-sm text-green-400">{ok}</p>}
+            <div className="flex gap-2">
               <button
-                onClick={onSend}
-                disabled={!selected || !body.trim() || sending}
-                className="flex items-center gap-2 bg-purple-600 disabled:opacity-60 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-                title="Enviar"
+                onClick={onEnviar}
+                disabled={sending}
+                className="px-4 py-2 rounded-lg bg-purple-600 text-white disabled:opacity-60 hover:bg-purple-700"
               >
-                <SendHorizontal className="h-4 w-4" />
+                Enviar
+              </button>
+              <button
+                type="button"
+                onClick={onLimpiar}
+                className="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800"
+              >
+                Limpiar
               </button>
             </div>
           </div>
-        </main>
+        </div>
       </div>
     </section>
   );
