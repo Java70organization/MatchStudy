@@ -1,17 +1,168 @@
-import {
-  Rss,
-  Users,
-  TrendingUp,
-  MessageCircle,
-  Search,
-  Filter,
-  Upload,
-} from "lucide-react";
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import { Rss, Search, Filter, Upload } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
+
+type FeedRow = {
+  id?: string | number;
+  hora: string;
+  usuario: string;
+  materia: string;
+  descripcion: string;
+  universidad?: string | null;
+  avatar_url?: string | null;
+};
+
+function timeAgo(dateStr: string) {
+  const d = new Date(dateStr);
+  const diff = Date.now() - d.getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `hace ${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `hace ${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h}h`;
+  const days = Math.floor(h / 24);
+  return `hace ${days}d`;
+}
 
 export default function FeedsPage() {
+  const [items, setItems] = useState<FeedRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [form, setForm] = useState({ materia: "", descripcion: "" });
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [dateRange, setDateRange] = useState<"all" | "today" | "7d" | "30d">(
+    "all"
+  );
+  const maxLen = 500;
+  const [selfAvatarUrl, setSelfAvatarUrl] = useState<string | null>(null);
+  const [selfInitial, setSelfInitial] = useState<string>("U");
+
+  const filtered = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    const now = new Date();
+    const inRange = (iso: string) => {
+      if (dateRange === "all") return true;
+      const d = new Date(iso);
+      if (dateRange === "today") return d.toDateString() === now.toDateString();
+      if (dateRange === "7d") {
+        const past = new Date(now);
+        past.setDate(now.getDate() - 7);
+        return d >= past && d <= now;
+      }
+      if (dateRange === "30d") {
+        const past = new Date(now);
+        past.setDate(now.getDate() - 30);
+        return d >= past && d <= now;
+      }
+      return true;
+    };
+    return items.filter((it) => {
+      const textMatch =
+        !t ||
+        it.materia.toLowerCase().includes(t) ||
+        it.descripcion.toLowerCase().includes(t) ||
+        (it.usuario ?? "").toLowerCase().includes(t) ||
+        (it.universidad ?? "").toLowerCase().includes(t);
+      return textMatch && inRange(it.hora);
+    });
+  }, [items, q, dateRange]);
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/feeds-with-users", { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Error cargando feeds");
+      setItems((json.data as FeedRow[]) || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error cargando feeds");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  // Cargar avatar y nombre del usuario actual para el composer
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        const nameInitial =
+          (u?.user?.user_metadata?.full_name as string | undefined)?.charAt(
+            0
+          ) ||
+          u?.user?.email?.charAt(0) ||
+          "U";
+        setSelfInitial(nameInitial.toUpperCase());
+        const res = await fetch("/api/profile-photo/signed", {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (res.ok) {
+          const j = await res.json();
+          if (j?.url) setSelfAvatarUrl(j.url as string);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
+  const onPost = async () => {
+    try {
+      setPosting(true);
+      setError(null);
+      if (!form.materia.trim() || !form.descripcion.trim()) {
+        setError("Materia y descripción son requeridas");
+        return;
+      }
+      const { data: u, error: authError } = await supabase.auth.getUser();
+      if (authError || !u || !u.user) throw new Error("No autorizado");
+      const displayName =
+        (u.user.user_metadata?.full_name as string | undefined) ||
+        u.user.email?.split("@")[0] ||
+        "Usuario";
+      const now = new Date().toISOString();
+      const insertRow: FeedRow = {
+        hora: now,
+        usuario: displayName,
+        materia: form.materia.trim(),
+        descripcion: form.descripcion.trim(),
+      };
+      let { error } = await supabase
+        .from("feeds")
+        .insert({ ...insertRow, email: u.user.email });
+      if (
+        error &&
+        String(error.message || "")
+          .toLowerCase()
+          .includes("email")
+      ) {
+        const r2 = await supabase.from("feeds").insert(insertRow);
+        const error2 = r2.error;
+        if (error2) error = error2;
+      }
+      if (error) throw new Error(error.message);
+      setItems((prev) => [insertRow, ...prev]);
+      setForm({ materia: "", descripcion: "" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error publicando");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  // Likes deshabilitados
+
   return (
     <section className="space-y-8">
-      {/* Header */}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <Rss className="h-8 w-8 text-purple-400" />
@@ -21,147 +172,179 @@ export default function FeedsPage() {
         </div>
       </div>
 
-      {/* Barra de acciones */}
+      {/* Composer */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 md:p-5">
+        <div className="flex items-start gap-3">
+          {selfAvatarUrl ? (
+            <img
+              src={selfAvatarUrl}
+              alt="mi avatar"
+              className="w-10 h-10 rounded-full object-cover border border-slate-600"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300">
+              {selfInitial}
+            </div>
+          )}
+          <div className="flex-1 space-y-3">
+            <textarea
+              placeholder="¿Qué estás pensando?"
+              value={form.descripcion}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  descripcion: e.target.value.slice(0, maxLen),
+                }))
+              }
+              className="w-full px-4 py-3 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-white min-h-[96px] resize-y focus:outline-none focus:ring-2 focus:ring-purple-500"
+              rows={4}
+              maxLength={maxLen}
+            />
+            <div className="flex items-center justify-between gap-3">
+              <input
+                type="text"
+                placeholder="Materia"
+                value={form.materia}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, materia: e.target.value }))
+                }
+                className="flex-1 px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-white"
+              />
+              <div className="text-xs text-slate-400 pr-2">
+                {form.descripcion.length}/{maxLen}
+              </div>
+              <button
+                onClick={onPost}
+                disabled={
+                  posting || !form.descripcion.trim() || !form.materia.trim()
+                }
+                className="flex items-center gap-2 bg-purple-600 disabled:opacity-60 text-white px-5 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                <Upload className="h-4 w-4" />{" "}
+                {posting ? "Publicando..." : "Publicar"}
+              </button>
+            </div>
+            {error && <p className="text-sm text-red-400">{error}</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Barra de búsqueda */}
       <div className="flex flex-col md:flex-row gap-4 justify-between">
         <div className="flex gap-4 flex-1">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
               placeholder="Buscar feeds..."
               className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
-          <button className="flex items-center gap-2 bg-slate-800 border border-slate-700 text-slate-300 px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">
-            <Filter className="h-4 w-4" />
-            Filtros
-          </button>
-        </div>
-        <button className="flex items-center gap-2 bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-          <Upload className="h-4 w-4" />
-          Publicar un Feed
-        </button>
-      </div>
-
-      {/* Feed de asesorías */}
-      <div className="grid gap-6">
-        {/* Asesoría 1 */}
-        <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
-              <Users className="h-6 w-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="text-lg font-semibold text-white">
-                  Matemáticas - Cálculo Diferencial
-                </h3>
-                <span className="bg-green-600/20 text-green-400 text-xs px-2 py-1 rounded-full">
-                  Disponible
-                </span>
+          <div className="relative">
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className="flex items-center gap-2 bg-slate-800 border border-slate-700 text-slate-300 px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors"
+            >
+              <Filter className="h-4 w-4" /> Filtros
+            </button>
+            {showFilters && (
+              <div className="absolute z-10 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-900 p-3 shadow-lg">
+                <p className="text-xs text-slate-400 mb-2">Filtrar por fecha</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setDateRange("all")}
+                    className={`px-2 py-1 rounded border ${
+                      dateRange === "all"
+                        ? "border-purple-500 text-purple-300"
+                        : "border-slate-700 text-slate-300 hover:border-slate-600"
+                    }`}
+                  >
+                    Todas
+                  </button>
+                  <button
+                    onClick={() => setDateRange("today")}
+                    className={`px-2 py-1 rounded border ${
+                      dateRange === "today"
+                        ? "border-purple-500 text-purple-300"
+                        : "border-slate-700 text-slate-300 hover:border-slate-600"
+                    }`}
+                  >
+                    Hoy
+                  </button>
+                  <button
+                    onClick={() => setDateRange("7d")}
+                    className={`px-2 py-1 rounded border ${
+                      dateRange === "7d"
+                        ? "border-purple-500 text-purple-300"
+                        : "border-slate-700 text-slate-300 hover:border-slate-600"
+                    }`}
+                  >
+                    Últimos 7 días
+                  </button>
+                  <button
+                    onClick={() => setDateRange("30d")}
+                    className={`px-2 py-1 rounded border ${
+                      dateRange === "30d"
+                        ? "border-purple-500 text-purple-300"
+                        : "border-slate-700 text-slate-300 hover:border-slate-600"
+                    }`}
+                  >
+                    Últimos 30 días
+                  </button>
+                </div>
               </div>
-              <p className="text-slate-300 mb-3">
-                Tutoría grupal sobre derivadas e integrales. Resolveremos
-                ejercicios prácticos y dudas específicas.
-              </p>
-              <div className="flex items-center gap-4 text-sm text-slate-400">
-                <span>👤 Juan Pérez</span>
-                <span>⭐ 4.8 (23 reviews)</span>
-                <span>🕒 Hoy 3:00 PM</span>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-                  Unirse
-                </button>
-                <button className="border border-slate-600 text-slate-300 px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">
-                  Ver detalles
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Asesoría 2 */}
-        <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="text-lg font-semibold text-white">
-                  Programación - Python Básico
-                </h3>
-                <span className="bg-yellow-600/20 text-yellow-400 text-xs px-2 py-1 rounded-full">
-                  2 espacios
-                </span>
-              </div>
-              <p className="text-slate-300 mb-3">
-                Aprende los fundamentos de Python: variables, funciones, bucles
-                y estructuras de datos básicas.
-              </p>
-              <div className="flex items-center gap-4 text-sm text-slate-400">
-                <span>👤 María González</span>
-                <span>⭐ 4.9 (45 reviews)</span>
-                <span>🕒 Mañana 10:00 AM</span>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-                  Reservar
-                </button>
-                <button className="border border-slate-600 text-slate-300 px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">
-                  Ver detalles
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Asesoría 3 */}
-        <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
-              <MessageCircle className="h-6 w-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="text-lg font-semibold text-white">
-                  Física - Mecánica Clásica
-                </h3>
-                <span className="bg-red-600/20 text-red-400 text-xs px-2 py-1 rounded-full">
-                  Lleno
-                </span>
-              </div>
-              <p className="text-slate-300 mb-3">
-                Repaso de cinemática y dinámica. Resolución de problemas de
-                movimiento y fuerzas.
-              </p>
-              <div className="flex items-center gap-4 text-sm text-slate-400">
-                <span>👤 Carlos Ramírez</span>
-                <span>⭐ 4.7 (18 reviews)</span>
-                <span>🕒 Hoy 7:00 PM</span>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button
-                  className="bg-slate-600 text-slate-400 px-4 py-2 rounded-lg cursor-not-allowed"
-                  disabled
-                >
-                  Sin espacios
-                </button>
-                <button className="border border-slate-600 text-slate-300 px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">
-                  Lista de espera
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Botón cargar más */}
-      <div className="text-center">
-        <button className="bg-slate-800 border border-slate-700 text-slate-300 px-6 py-3 rounded-lg hover:bg-slate-700 transition-colors">
-          Cargar más asesorías
-        </button>
+      {/* Lista de feeds */}
+      <div className="grid gap-4">
+        {loading ? (
+          <p className="text-slate-400">Cargando...</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-slate-400">No hay feeds aún.</p>
+        ) : (
+          filtered.map((f) => (
+            <article
+              key={`${f.usuario}-${f.hora}`}
+              className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700"
+            >
+              <div className="flex items-start gap-3">
+                {f.avatar_url ? (
+                  <img
+                    src={f.avatar_url}
+                    alt="avatar"
+                    className="w-10 h-10 rounded-full object-cover border border-slate-600"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300">
+                    {(f.usuario || "U").charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <span className="text-white font-medium">
+                      {f.usuario || "Usuario"}
+                    </span>
+                    <span>•</span>
+                    <span>{timeAgo(f.hora)}</span>
+                  </div>
+                  {typeof f.universidad === "string" && f.universidad && (
+                    <p className="text-xs text-slate-400">{f.universidad}</p>
+                  )}
+                  <h3 className="text-white font-semibold mt-1">{f.materia}</h3>
+                  <p className="text-slate-300 mt-1 whitespace-pre-wrap">
+                    {f.descripcion}
+                  </p>
+                  {/* Likes deshabilitados */}
+                </div>
+              </div>
+            </article>
+          ))
+        )}
       </div>
     </section>
   );

@@ -1,9 +1,100 @@
-import { FileText, Upload, Search, Filter, Download, Eye } from "lucide-react";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { FileText, Download, Eye, Search, Upload } from "lucide-react";
+
+type MaterialRow = {
+  id?: string | number;
+  hora: string; // ISO date string
+  usuario?: string | null;
+  materia: string;
+  descripcion: string;
+  email: string | null;
+  urlmaterial: string;
+  downloadUrl?: string | null;
+};
 
 export default function MaterialesPage() {
+  const [items, setItems] = useState<MaterialRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+
+  // Formulario de subida
+  const [form, setForm] = useState({ materia: "", descripcion: "" });
+  const [file, setFile] = useState<File | null>(null);
+  const [posting, setPosting] = useState(false);
+  const maxLen = 280;
+
+  // Cargar materiales desde la API
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch("/api/materials", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok)
+          throw new Error(json?.error || "Error cargando materiales");
+        setItems((json.data as MaterialRow[]) || []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Error cargando materiales");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return items;
+    return items.filter(
+      (it) =>
+        it.materia.toLowerCase().includes(t) ||
+        it.descripcion.toLowerCase().includes(t) ||
+        (it.usuario ?? "").toLowerCase().includes(t) ||
+        (it.email ?? "").toLowerCase().includes(t)
+    );
+  }, [items, q]);
+
+  const onUpload = async () => {
+    try {
+      setPosting(true);
+      setError(null);
+      if (!form.materia.trim() || !form.descripcion.trim()) {
+        setError("Materia y descripción son requeridas");
+        return;
+      }
+      if (!file) {
+        setError("Selecciona un archivo PDF");
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append("materia", form.materia);
+      fd.append("descripcion", form.descripcion);
+      fd.append("file", file);
+
+      const res = await fetch("/api/materials/upload", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Error subiendo material");
+      setItems((prev) => [json.data as MaterialRow, ...prev]);
+      setForm({ materia: "", descripcion: "" });
+      setFile(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error subiendo material");
+    } finally {
+      setPosting(false);
+    }
+  };
+
   return (
     <section className="space-y-8">
-      {/* Header */}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <FileText className="h-8 w-8 text-purple-400" />
@@ -11,286 +102,143 @@ export default function MaterialesPage() {
             Materiales
           </h1>
         </div>
+        <p className="text-slate-400">
+          Sube PDFs y navega los materiales compartidos.
+        </p>
       </div>
 
-      {/* Barra de acciones */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between">
-        <div className="flex gap-4 flex-1">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+      {/* Composer simple de material */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 md:p-5">
+        <div className="flex-1 space-y-3">
+          <textarea
+            placeholder="Descripción del material (máx. 280)"
+            value={form.descripcion}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                descripcion: e.target.value.slice(0, maxLen),
+              }))
+            }
+            className="w-full px-4 py-3 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-white min-h-[96px] resize-y focus:outline-none focus:ring-2 focus:ring-purple-500"
+            rows={4}
+            maxLength={maxLen}
+          />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <input
               type="text"
-              placeholder="Buscar materiales..."
-              className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Materia"
+              value={form.materia}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, materia: e.target.value }))
+              }
+              className="flex-1 px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-white"
             />
+            <input
+              id="file"
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="text-slate-300 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700"
+            />
+            <div className="text-xs text-slate-400 hidden sm:block">
+              {form.descripcion.length}/{maxLen}
+            </div>
+            <button
+              onClick={onUpload}
+              disabled={
+                posting ||
+                !form.materia.trim() ||
+                !form.descripcion.trim() ||
+                !file
+              }
+              className="flex items-center gap-2 bg-purple-600 disabled:opacity-60 text-white px-5 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              <Upload className="h-4 w-4" />{" "}
+              {posting ? "Compartiendo..." : "Compartir Material"}
+            </button>
           </div>
-          <button className="flex items-center gap-2 bg-slate-800 border border-slate-700 text-slate-300 px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">
-            <Filter className="h-4 w-4" />
-            Filtros
-          </button>
+          {file && (
+            <div className="text-xs text-slate-400 bg-slate-800/60 border border-slate-700/60 rounded px-2 py-1 inline-flex">
+              {file.name} • {(file.size / (1024 * 1024)).toFixed(2)} MB
+            </div>
+          )}
+          {error && <p className="text-sm text-red-400">{error}</p>}
         </div>
-        <button className="flex items-center gap-2 bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-          <Upload className="h-4 w-4" />
-          Subir Material
-        </button>
       </div>
 
-      {/* Grid de materiales */}
+      {/* Búsqueda */}
+      <div className="relative max-w-xl">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por materia, descripción, usuario o email"
+          className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
+      </div>
+
+      {loading && <p className="text-slate-400">Cargando...</p>}
+      {error && !posting && <p className="text-red-400">{error}</p>}
+      {!loading && !error && filtered.length === 0 && (
+        <p className="text-slate-400">No hay materiales.</p>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Material 1 */}
-        <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-600/20 rounded-lg flex items-center justify-center">
-                <FileText className="h-6 w-6 text-blue-400" />
+        {filtered.map((m) => (
+          <div
+            key={`${m.email}-${m.hora}-${m.urlmaterial}`}
+            className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-purple-600/20 rounded-lg flex items-center justify-center">
+                  <FileText className="h-6 w-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white">
+                    {m.materia || "Material"}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Publicado por {m.usuario || m.email || "Usuario"}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold text-white">
-                  Apuntes de Cálculo I
-                </h3>
-                <p className="text-sm text-slate-400">PDF • 2.4 MB</p>
-              </div>
+              <span className="bg-purple-600/20 text-purple-400 text-xs px-2 py-1 rounded-full">
+                {new Date(m.hora).toLocaleDateString("es-ES")}
+              </span>
             </div>
-            <span className="bg-blue-600/20 text-blue-400 text-xs px-2 py-1 rounded-full">
-              Matemáticas
-            </span>
-          </div>
 
-          <p className="text-slate-300 text-sm mb-4">
-            Resumen completo de derivadas, integrales y aplicaciones. Incluye
-            ejemplos resueltos paso a paso.
-          </p>
+            <p className="text-slate-300 text-sm mb-4 whitespace-pre-wrap">
+              {m.descripcion}
+            </p>
 
-          <div className="flex items-center gap-3 text-xs text-slate-400 mb-4">
-            <span>👤 María González</span>
-            <span>⭐ 4.9 (127)</span>
-            <span>📅 Hace 2 días</span>
-          </div>
-
-          <div className="flex gap-2">
-            <button className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-              <Download className="h-3 w-3" />
-              Descargar
-            </button>
-            <button className="flex items-center justify-center gap-2 border border-slate-600 text-slate-300 px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors text-sm">
-              <Eye className="h-3 w-3" />
-              Ver
-            </button>
-          </div>
-        </div>
-
-        {/* Material 2 */}
-        <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-green-600/20 rounded-lg flex items-center justify-center">
-                <FileText className="h-6 w-6 text-green-400" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-white">
-                  Ejercicios de Programación
-                </h3>
-                <p className="text-sm text-slate-400">ZIP • 5.1 MB</p>
-              </div>
+            <div className="flex gap-2">
+              {m.downloadUrl ? (
+                <a
+                  href={m.downloadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                >
+                  <Download className="h-3 w-3" /> Descargar
+                </a>
+              ) : (
+                <span className="text-xs text-slate-500">Sin URL</span>
+              )}
+              {m.downloadUrl && (
+                <a
+                  href={m.downloadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2 border border-slate-600 text-slate-300 px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors text-sm"
+                >
+                  <Eye className="h-3 w-3" /> Ver
+                </a>
+              )}
             </div>
-            <span className="bg-green-600/20 text-green-400 text-xs px-2 py-1 rounded-full">
-              Programación
-            </span>
           </div>
-
-          <p className="text-slate-300 text-sm mb-4">
-            Colección de 50 ejercicios de Python con soluciones. Ideal para
-            practicar estructuras de datos.
-          </p>
-
-          <div className="flex items-center gap-3 text-xs text-slate-400 mb-4">
-            <span>👤 Carlos Ramírez</span>
-            <span>⭐ 4.7 (89)</span>
-            <span>📅 Hace 1 semana</span>
-          </div>
-
-          <div className="flex gap-2">
-            <button className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-              <Download className="h-3 w-3" />
-              Descargar
-            </button>
-            <button className="flex items-center justify-center gap-2 border border-slate-600 text-slate-300 px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors text-sm">
-              <Eye className="h-3 w-3" />
-              Ver
-            </button>
-          </div>
-        </div>
-
-        {/* Material 3 */}
-        <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-red-600/20 rounded-lg flex items-center justify-center">
-                <FileText className="h-6 w-6 text-red-400" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-white">
-                  Formulario de Física
-                </h3>
-                <p className="text-sm text-slate-400">PDF • 1.2 MB</p>
-              </div>
-            </div>
-            <span className="bg-red-600/20 text-red-400 text-xs px-2 py-1 rounded-full">
-              Física
-            </span>
-          </div>
-
-          <p className="text-slate-300 text-sm mb-4">
-            Todas las fórmulas esenciales de mecánica, termodinámica y
-            electromagnetismo en un solo documento.
-          </p>
-
-          <div className="flex items-center gap-3 text-xs text-slate-400 mb-4">
-            <span>👤 Ana López</span>
-            <span>⭐ 4.8 (156)</span>
-            <span>📅 Hace 3 días</span>
-          </div>
-
-          <div className="flex gap-2">
-            <button className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-              <Download className="h-3 w-3" />
-              Descargar
-            </button>
-            <button className="flex items-center justify-center gap-2 border border-slate-600 text-slate-300 px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors text-sm">
-              <Eye className="h-3 w-3" />
-              Ver
-            </button>
-          </div>
-        </div>
-
-        {/* Material 4 */}
-        <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-yellow-600/20 rounded-lg flex items-center justify-center">
-                <FileText className="h-6 w-6 text-yellow-400" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-white">Química Orgánica</h3>
-                <p className="text-sm text-slate-400">PPTX • 8.7 MB</p>
-              </div>
-            </div>
-            <span className="bg-yellow-600/20 text-yellow-400 text-xs px-2 py-1 rounded-full">
-              Química
-            </span>
-          </div>
-
-          <p className="text-slate-300 text-sm mb-4">
-            Presentación interactiva sobre reacciones orgánicas, mecanismos y
-            síntesis. Con animaciones.
-          </p>
-
-          <div className="flex items-center gap-3 text-xs text-slate-400 mb-4">
-            <span>👤 Dr. Pérez</span>
-            <span>⭐ 5.0 (234)</span>
-            <span>📅 Hace 5 días</span>
-          </div>
-
-          <div className="flex gap-2">
-            <button className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-              <Download className="h-3 w-3" />
-              Descargar
-            </button>
-            <button className="flex items-center justify-center gap-2 border border-slate-600 text-slate-300 px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors text-sm">
-              <Eye className="h-3 w-3" />
-              Ver
-            </button>
-          </div>
-        </div>
-
-        {/* Material 5 */}
-        <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-600/20 rounded-lg flex items-center justify-center">
-                <FileText className="h-6 w-6 text-purple-400" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-white">
-                  English Grammar Guide
-                </h3>
-                <p className="text-sm text-slate-400">PDF • 3.5 MB</p>
-              </div>
-            </div>
-            <span className="bg-purple-600/20 text-purple-400 text-xs px-2 py-1 rounded-full">
-              Inglés
-            </span>
-          </div>
-
-          <p className="text-slate-300 text-sm mb-4">
-            Guía completa de gramática inglesa con ejemplos, ejercicios y reglas
-            explicadas de forma sencilla.
-          </p>
-
-          <div className="flex items-center gap-3 text-xs text-slate-400 mb-4">
-            <span>👤 Sarah Johnson</span>
-            <span>⭐ 4.6 (78)</span>
-            <span>📅 Hace 1 día</span>
-          </div>
-
-          <div className="flex gap-2">
-            <button className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-              <Download className="h-3 w-3" />
-              Descargar
-            </button>
-            <button className="flex items-center justify-center gap-2 border border-slate-600 text-slate-300 px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors text-sm">
-              <Eye className="h-3 w-3" />
-              Ver
-            </button>
-          </div>
-        </div>
-
-        {/* Material 6 */}
-        <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-cyan-600/20 rounded-lg flex items-center justify-center">
-                <FileText className="h-6 w-6 text-cyan-400" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-white">Historia Universal</h3>
-                <p className="text-sm text-slate-400">DOCX • 4.2 MB</p>
-              </div>
-            </div>
-            <span className="bg-cyan-600/20 text-cyan-400 text-xs px-2 py-1 rounded-full">
-              Historia
-            </span>
-          </div>
-
-          <p className="text-slate-300 text-sm mb-4">
-            Línea de tiempo interactiva de los eventos más importantes de la
-            historia mundial hasta el siglo XXI.
-          </p>
-
-          <div className="flex items-center gap-3 text-xs text-slate-400 mb-4">
-            <span>👤 Prof. Martínez</span>
-            <span>⭐ 4.9 (201)</span>
-            <span>📅 Hace 2 semanas</span>
-          </div>
-
-          <div className="flex gap-2">
-            <button className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-              <Download className="h-3 w-3" />
-              Descargar
-            </button>
-            <button className="flex items-center justify-center gap-2 border border-slate-600 text-slate-300 px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors text-sm">
-              <Eye className="h-3 w-3" />
-              Ver
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Botón cargar más */}
-      <div className="text-center">
-        <button className="bg-slate-800 border border-slate-700 text-slate-300 px-6 py-3 rounded-lg hover:bg-slate-700 transition-colors">
-          Cargar más materiales
-        </button>
+        ))}
       </div>
     </section>
   );

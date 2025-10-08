@@ -3,12 +3,23 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { checkUserProfile, DBUser } from "@/lib/supabase/user";
+import ProfilePhotoUploader from "./ProfilePhotoUploader";
 
 export default function PerfilPage() {
   const [userProfile, setUserProfile] = useState<DBUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    nombres: "",
+    apellidos: "",
+    telefono: "",
+    universidad: "",
+  });
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const loadUserProfile = async () => {
@@ -33,6 +44,26 @@ export default function PerfilPage() {
 
           if (profile) {
             setUserProfile(profile);
+            setForm({
+              nombres: profile.nombres || "",
+              apellidos: profile.apellidos || "",
+              telefono: profile.telefono || "",
+              universidad: profile.universidad || "",
+            });
+            if (profile.urlFoto) {
+              try {
+                const res = await fetch("/api/profile-photo/signed", {
+                  cache: "no-store",
+                  credentials: "include",
+                });
+                const data = await res.json();
+                setSignedUrl(res.ok ? data.url ?? null : null);
+              } catch {
+                setSignedUrl(null);
+              }
+            } else {
+              setSignedUrl(null);
+            }
           } else {
             setError(
               "No se encontró el perfil del usuario. Completa tu perfil primero."
@@ -93,7 +124,7 @@ export default function PerfilPage() {
           </p>
         </div>
         <div className="bg-green-900/20 border border-green-500/50 rounded-lg px-4 py-2">
-          <span className="text-green-400 text-sm">✓ Perfil Completo</span>
+          <span className="text-green-400 text-sm">Completo</span>
         </div>
       </div>
 
@@ -114,9 +145,16 @@ export default function PerfilPage() {
                 </label>
                 <input
                   type="text"
-                  value={userProfile?.nombres || ""}
-                  readOnly
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white cursor-not-allowed"
+                  value={form.nombres}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, nombres: e.target.value }))
+                  }
+                  readOnly={!editing}
+                  className={`w-full px-3 py-2 border rounded-lg text-white ${
+                    editing
+                      ? "bg-slate-800/50 border-slate-600"
+                      : "bg-slate-800/50 border-slate-700/50 cursor-not-allowed"
+                  }`}
                 />
               </div>
               <div>
@@ -125,9 +163,16 @@ export default function PerfilPage() {
                 </label>
                 <input
                   type="text"
-                  value={userProfile?.apellidos || ""}
-                  readOnly
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white cursor-not-allowed"
+                  value={form.apellidos}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, apellidos: e.target.value }))
+                  }
+                  readOnly={!editing}
+                  className={`w-full px-3 py-2 border rounded-lg text-white ${
+                    editing
+                      ? "bg-slate-800/50 border-slate-600"
+                      : "bg-slate-800/50 border-slate-700/50 cursor-not-allowed"
+                  }`}
                 />
               </div>
             </div>
@@ -148,9 +193,17 @@ export default function PerfilPage() {
               </label>
               <input
                 type="tel"
-                value={userProfile?.telefono || "No especificado"}
-                readOnly
-                className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white cursor-not-allowed"
+                value={form.telefono}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, telefono: e.target.value }))
+                }
+                readOnly={!editing}
+                placeholder="No especificado"
+                className={`w-full px-3 py-2 border rounded-lg text-white ${
+                  editing
+                    ? "bg-slate-800/50 border-slate-600"
+                    : "bg-slate-800/50 border-slate-700/50 cursor-not-allowed"
+                }`}
               />
             </div>
             <div>
@@ -159,9 +212,17 @@ export default function PerfilPage() {
               </label>
               <input
                 type="text"
-                value={userProfile?.universidad || "No especificada"}
-                readOnly
-                className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white cursor-not-allowed"
+                value={form.universidad}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, universidad: e.target.value }))
+                }
+                readOnly={!editing}
+                placeholder="No especificada"
+                className={`w-full px-3 py-2 border rounded-lg text-white ${
+                  editing
+                    ? "bg-slate-800/50 border-slate-600"
+                    : "bg-slate-800/50 border-slate-700/50 cursor-not-allowed"
+                }`}
               />
             </div>
             <div>
@@ -188,6 +249,101 @@ export default function PerfilPage() {
                 className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white cursor-not-allowed"
               />
             </div>
+
+            {/* Botones de edición/guardado */}
+            <div className="pt-2 flex gap-3">
+              {!editing ? (
+                <button
+                  onClick={() => {
+                    setSaveMsg(null);
+                    setEditing(true);
+                  }}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  Editar información
+                </button>
+              ) : (
+                <>
+                  <button
+                    disabled={saving}
+                    onClick={async () => {
+                      try {
+                        setSaving(true);
+                        setSaveMsg(null);
+                        const res = await fetch("/api/update-user-profile", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          credentials: "include",
+                          body: JSON.stringify({
+                            nombres: form.nombres,
+                            apellidos: form.apellidos,
+                            telefono: form.telefono,
+                            universidad: form.universidad,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok)
+                          throw new Error(data?.error || "Error al guardar");
+                        setUserProfile((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                nombres: data.data?.nombres ?? form.nombres,
+                                apellidos:
+                                  data.data?.apellidos ?? form.apellidos,
+                                telefono: data.data?.telefono ?? form.telefono,
+                                universidad:
+                                  data.data?.universidad ?? form.universidad,
+                              }
+                            : prev
+                        );
+                        setSaveMsg("Cambios guardados correctamente");
+                        setEditing(false);
+                      } catch (e) {
+                        setSaveMsg(
+                          e instanceof Error ? e.message : "Error al guardar"
+                        );
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    className="bg-green-600 disabled:opacity-60 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    {saving ? "Guardando..." : "Guardar cambios"}
+                  </button>
+                  <button
+                    disabled={saving}
+                    onClick={() => {
+                      setEditing(false);
+                      setSaveMsg(null);
+                      if (userProfile) {
+                        setForm({
+                          nombres: userProfile.nombres || "",
+                          apellidos: userProfile.apellidos || "",
+                          telefono: userProfile.telefono || "",
+                          universidad: userProfile.universidad || "",
+                        });
+                      }
+                    }}
+                    className="bg-slate-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg hover:bg-slate-600 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </>
+              )}
+            </div>
+
+            {saveMsg && (
+              <p
+                className={`text-sm ${
+                  saveMsg.includes("guardados")
+                    ? "text-green-400"
+                    : "text-red-400"
+                }`}
+              >
+                {saveMsg}
+              </p>
+            )}
           </div>
         </div>
 
@@ -204,14 +360,14 @@ export default function PerfilPage() {
             <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
               <span className="text-slate-300">Estado del Perfil</span>
               <span className="text-sm font-semibold text-green-400">
-                ✓ Completo
+                Completo
               </span>
             </div>
             <div className="p-3 bg-slate-800/50 rounded-lg">
               <span className="text-slate-300 block mb-2">Foto de Perfil</span>
-              {userProfile?.urlFoto ? (
+              {signedUrl ? (
                 <img
-                  src={userProfile.urlFoto}
+                  src={signedUrl}
                   alt="Foto de perfil"
                   className="w-20 h-20 rounded-full object-cover border border-slate-600"
                 />
@@ -223,21 +379,20 @@ export default function PerfilPage() {
                   </span>
                 </div>
               )}
+              <div className="mt-4">
+                <ProfilePhotoUploader
+                  onUploaded={(r) => {
+                    setUserProfile((prev) =>
+                      prev ? { ...prev, urlFoto: r.path } : prev
+                    );
+                    setSignedUrl(r.signedUrl ?? null);
+                  }}
+                />
+              </div>
             </div>
           </div>
 
-          {/* Botón de actualización (futuro) */}
-          <div className="mt-6 pt-4 border-t border-slate-700">
-            <button
-              className="w-full bg-slate-700 text-slate-400 px-4 py-2 rounded-lg cursor-not-allowed opacity-50"
-              disabled
-            >
-              🔒 Edición no disponible
-            </button>
-            <p className="text-xs text-slate-500 mt-2 text-center">
-              La edición del perfil estará disponible próximamente
-            </p>
-          </div>
+          {/* Se eliminaron botones de edición de esta tarjeta */}
         </div>
       </div>
     </section>

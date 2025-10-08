@@ -1,0 +1,96 @@
+import { NextResponse } from "next/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+
+const BUCKET = "Profile";
+
+function extractObjectKey(input: string | null | undefined): string | null {
+  if (!input) return null;
+  try {
+    if (/^https?:\/\//i.test(input)) {
+      const url = new URL(input);
+      const marker = "/storage/v1/object/public/" + BUCKET + "/";
+      const idx = url.pathname.indexOf(marker);
+      if (idx === -1) return null;
+      return url.pathname.substring(idx + marker.length);
+    }
+    return input;
+  } catch {
+    return null;
+  }
+}
+
+export async function GET() {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    if (!supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json(
+        { error: "Faltan variables de entorno de Supabase" },
+        { status: 500 },
+      );
+    }
+    const admin = createSupabaseClient(supabaseUrl, serviceRoleKey);
+
+    const { data: feeds, error } = await admin
+      .from("feeds")
+      .select("hora, usuario, email, materia, descripcion")
+      .order("hora", { ascending: false })
+      .limit(100);
+    if (error) {
+      return NextResponse.json(
+        { error: `Error obteniendo feeds: ${error.message}` },
+        { status: 500 },
+      );
+    }
+
+    type FeedRow = {
+      hora: string;
+      usuario: string | null;
+      email?: string | null;
+      materia: string;
+      descripcion: string;
+    };
+
+    const result = await Promise.all(
+      (feeds ?? []).map(async (f: FeedRow) => {
+        let universidad: string | null = null;
+        let avatar_url: string | null = null;
+        if (f.email) {
+          const { data: u } = await admin
+            .from("usuarios")
+            .select("universidad, urlFoto")
+            .eq("email", f.email)
+            .maybeSingle();
+          if (u) {
+            universidad = u.universidad ?? null;
+            const key = extractObjectKey(u.urlFoto ?? null);
+            if (key) {
+              const { data: signed } = await admin.storage
+                .from(BUCKET)
+                .createSignedUrl(key, 60 * 60 * 24 * 7);
+              avatar_url = signed?.signedUrl ?? null;
+            }
+          }
+        }
+        return {
+          hora: f.hora,
+          usuario: f.usuario,
+          materia: f.materia,
+          descripcion: f.descripcion,
+          likes: 0,
+          universidad,
+          avatar_url,
+          display_name: f.usuario, // displayname desde feeds.usuario
+        };
+      }),
+    );
+
+    return NextResponse.json({ data: result }, { status: 200 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error desconocido";
+    return NextResponse.json(
+      { error: `Error interno del servidor: ${msg}` },
+      { status: 500 },
+    );
+  }
+}
