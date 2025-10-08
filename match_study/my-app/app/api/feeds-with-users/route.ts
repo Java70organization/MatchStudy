@@ -26,7 +26,7 @@ export async function GET() {
     if (!supabaseUrl || !serviceRoleKey) {
       return NextResponse.json(
         { error: "Faltan variables de entorno de Supabase" },
-        { status: 500 },
+        { status: 500 }
       );
     }
     const admin = createSupabaseClient(supabaseUrl, serviceRoleKey);
@@ -39,7 +39,7 @@ export async function GET() {
     if (error) {
       return NextResponse.json(
         { error: `Error obteniendo feeds: ${error.message}` },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
@@ -67,7 +67,9 @@ export async function GET() {
             universidad = u.universidad ?? null;
             nombres = (u.nombres as string | null) ?? null;
             apellidos = (u.apellidos as string | null) ?? null;
-            const key = extractObjectKey((u as { urlFoto?: string | null }).urlFoto ?? null);
+            const key = extractObjectKey(
+              (u as { urlFoto?: string | null }).urlFoto ?? null
+            );
             if (key) {
               const { data: signed } = await admin.storage
                 .from(BUCKET)
@@ -87,7 +89,7 @@ export async function GET() {
           universidad,
           avatar_url,
         };
-      }),
+      })
     );
 
     return NextResponse.json({ data: result }, { status: 200 });
@@ -95,7 +97,7 @@ export async function GET() {
     const msg = e instanceof Error ? e.message : "Error desconocido";
     return NextResponse.json(
       { error: `Error interno del servidor: ${msg}` },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

@@ -39,7 +39,9 @@ export default function MensajesPage() {
       setSelfEmail(em);
       if (em) {
         try {
-          const profile = await (await import("@/lib/supabase/user")).checkUserProfile(em);
+          const profile = await (
+            await import("@/lib/supabase/user")
+          ).checkUserProfile(em);
           if (profile) {
             setSelfFirst(profile.nombres || "");
             setSelfLast(profile.apellidos || "");
@@ -116,24 +118,24 @@ export default function MensajesPage() {
     }
     try {
       setSending(true);
-      const res = await fetch('/api/messages/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+      const res = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           to: email,
           message: mensaje,
-          subject: asunto.trim() || 'Mensaje desde Mensajes',
+          subject: asunto.trim() || "Mensaje desde Mensajes",
           fromEmail: selfEmail,
           fromFirstName: selfFirst,
           fromLastName: selfLast,
-        })
+        }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error || 'No se pudo enviar');
-      setOk('Mensaje enviado correctamente.');
-      setMensaje('');
-      setAsunto('');
+      if (!res.ok) throw new Error(j?.error || "No se pudo enviar");
+      setOk("Mensaje enviado correctamente.");
+      setMensaje("");
+      setAsunto("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error enviando");
     } finally {
@@ -222,7 +224,9 @@ export default function MensajesPage() {
           <h2 className="text-slate-200 font-semibold mb-3">Enviar mensaje</h2>
           <div className="space-y-3">
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Asunto</label>
+              <label className="block text-xs text-slate-400 mb-1">
+                Asunto
+              </label>
               <input
                 type="text"
                 value={asunto}

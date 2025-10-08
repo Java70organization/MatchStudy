@@ -49,7 +49,6 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
       icon: BookOpen,
       submenu: [
         { href: "/dashboard/asesorias/feeds", label: "Feeds", icon: Rss },
-
         {
           href: "/dashboard/asesorias/materiales",
           label: "Materiales",
@@ -61,7 +60,7 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
           icon: MessageSquare,
         },
         {
-          href: "/dashboard/asesorias/crear-sala",
+          href: "/dashboard/asesorias/salas",
           label: "Salas",
           icon: Video,
         },
