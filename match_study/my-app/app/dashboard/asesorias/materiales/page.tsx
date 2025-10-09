@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileText, Download, Eye, Search, Upload } from "lucide-react";
+import { FileText, Download, Search, Upload } from "lucide-react";
 
 type MaterialRow = {
   id?: string | number;
@@ -286,16 +286,7 @@ export default function MaterialesPage() {
               ) : (
                 <span className="text-xs text-slate-500">Sin URL</span>
               )}
-              {m.downloadUrl && (
-                <a
-                  href={m.downloadUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center gap-2 border border-slate-600 text-slate-300 px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors text-sm"
-                >
-                  <Eye className="h-3 w-3" /> Ver
-                </a>
-              )}
+
             </div>
           </div>
         ))}

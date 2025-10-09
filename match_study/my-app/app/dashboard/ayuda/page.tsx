@@ -1,7 +1,8 @@
 "use client";
 
 import { HelpCircle, Send, MessageSquare } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 
 export default function AyudaPage() {
   const [formData, setFormData] = useState({
@@ -12,6 +13,29 @@ export default function AyudaPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isEmailLocked, setIsEmailLocked] = useState(false);
+
+  // Prefill email from active session and lock field
+  useEffect(() => {
+    const loadUserEmail = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const email = user?.email ?? "";
+        if (email) {
+          setFormData((prev) => ({ ...prev, email }));
+          setIsEmailLocked(true);
+        } else {
+          setIsEmailLocked(false);
+        }
+      } catch {
+        // keep editable on error
+        setIsEmailLocked(false);
+      }
+    };
+    loadUserEmail();
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -126,7 +150,8 @@ export default function AyudaPage() {
                   value={formData.email}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-colors"
+                  readOnly={isEmailLocked}
+                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-colors disabled:opacity-70"
                   placeholder="tu@email.com"
                 />
               </div>

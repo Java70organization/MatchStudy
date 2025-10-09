@@ -1,5 +1,6 @@
 import React from "react";
 import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 
 export default function SalaTestPage({
   params,
@@ -27,6 +28,12 @@ async function SalaTestContent({ codigo }: { codigo: string }) {
     <section className="space-y-3">
       <h1 className="text-2xl md:text-3xl font-extrabold text-white">{title}</h1>
       <div className="text-slate-400 text-sm">Asesor: {asesor} · Estudiante: {estudiante}</div>
+      <Link
+        href="/dashboard/lobby"
+        className="inline-flex items-center justify-center self-end px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors w-full"
+      >
+        Salir de la llamada
+      </Link>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <iframe
           src={iframeSrc}

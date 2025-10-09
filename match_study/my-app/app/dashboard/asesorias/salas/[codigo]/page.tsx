@@ -1,5 +1,6 @@
 import React from "react";
 import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 
 export default function SalaRoomPage({
   params,
@@ -30,6 +31,12 @@ async function SalaContent({ codigo }: { codigo: string }) {
       {error && (
         <p className="text-red-400 text-sm">No se pudo cargar la sala: {error.message}</p>
       )}
+      <Link
+        href="/dashboard/lobby"
+        className="inline-flex items-center justify-center self-end px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors w-full"
+      >
+        Salir de la llamada
+      </Link>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <iframe
           src={iframeSrc}
