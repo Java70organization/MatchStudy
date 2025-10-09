@@ -19,6 +19,7 @@ export default function MaterialesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [dateRange, setDateRange] = useState<"all" | "today" | "7d" | "30d">("today");
 
   // Formulario de subida
   const [form, setForm] = useState({ materia: "", descripcion: "" });
@@ -46,7 +47,7 @@ export default function MaterialesPage() {
     load();
   }, []);
 
-  const filtered = useMemo(() => {
+  const baseByText = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return items;
     return items.filter(
@@ -57,6 +58,33 @@ export default function MaterialesPage() {
         (it.email ?? "").toLowerCase().includes(t)
     );
   }, [items, q]);
+
+  const inRange = (iso: string, range: "all" | "today" | "7d" | "30d") => {
+    if (range === "all") return true;
+    const now = new Date();
+    const d = new Date(iso);
+    if (range === "today") return d.toDateString() === now.toDateString();
+    if (range === "7d") {
+      const past = new Date(now);
+      past.setDate(now.getDate() - 7);
+      return d >= past && d <= now;
+    }
+    if (range === "30d") {
+      const past = new Date(now);
+      past.setDate(now.getDate() - 30);
+      return d >= past && d <= now;
+    }
+    return true;
+  };
+
+  const counts = useMemo(() => ({
+    all: baseByText.length,
+    today: baseByText.filter((it) => inRange(it.hora, "today")).length,
+    d7: baseByText.filter((it) => inRange(it.hora, "7d")).length,
+    d30: baseByText.filter((it) => inRange(it.hora, "30d")).length,
+  }), [baseByText]);
+
+  const filtered = useMemo(() => baseByText.filter((it) => inRange(it.hora, dateRange)), [baseByText, dateRange]);
 
   const onUpload = async () => {
     try {
@@ -166,16 +194,38 @@ export default function MaterialesPage() {
         </div>
       </div>
 
-      {/* Búsqueda */}
-      <div className="relative max-w-xl">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por materia, descripción, usuario o email"
-          className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-        />
+      {/* Búsqueda y pestañas */}
+      <div className="flex flex-col md:flex-row gap-4 items-center">
+        <div className="relative w-full max-w-xl">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar por materia, descripción, usuario o email"
+            className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+        <div className="flex gap-2 text-sm">
+          {([
+            { k: "today", label: "Hoy", n: counts.today },
+            { k: "7d", label: "7 días", n: counts.d7 },
+            { k: "30d", label: "30 días", n: counts.d30 },
+            { k: "all", label: "Todos", n: counts.all },
+          ] as const).map((t) => (
+            <button
+              key={t.k}
+              onClick={() => setDateRange(t.k as any)}
+              className={`px-3 py-1.5 rounded-lg border ${
+                dateRange === (t.k as any)
+                  ? "bg-purple-600 text-white border-purple-600"
+                  : "border-slate-700 text-slate-300 hover:bg-slate-800"
+              }`}
+            >
+              {t.label} <span className="opacity-80">({t.n})</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading && <p className="text-slate-400">Cargando...</p>}

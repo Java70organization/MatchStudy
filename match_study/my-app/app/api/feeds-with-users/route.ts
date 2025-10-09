@@ -33,7 +33,7 @@ export async function GET() {
 
     const { data: feeds, error } = await admin
       .from("feeds")
-      .select("hora, usuario, email, materia, descripcion")
+      .select("id, hora, usuario, email, materia, descripcion")
       .order("hora", { ascending: false })
       .limit(100);
     if (error) {
@@ -44,6 +44,7 @@ export async function GET() {
     }
 
     type FeedRow = {
+      id?: string | number;
       hora: string;
       usuario: string | null;
       email?: string | null;
@@ -81,8 +82,10 @@ export async function GET() {
         const fullName = `${nombres ?? ""} ${apellidos ?? ""}`.trim();
         const usuario = fullName || f.usuario;
         return {
+          id: (f as any).id,
           hora: f.hora,
           usuario,
+          email: (f as any).email ?? null,
           materia: f.materia,
           descripcion: f.descripcion,
           likes: 0,

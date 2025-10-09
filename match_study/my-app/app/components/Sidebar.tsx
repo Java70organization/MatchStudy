@@ -19,6 +19,7 @@ import {
   Video,
   FileText,
   Calendar,
+  Settings,
 } from "lucide-react";
 
 type SidebarProps = { open: boolean; setOpen: (v: boolean) => void };
@@ -65,13 +66,19 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
           icon: Video,
         },
         {
+          href: "/dashboard/asesorias/programar-sala",
+          label: "Programar una sala",
+          icon: Calendar,
+        },
+        {
           href: "/dashboard/organizacion/calendario",
           label: "Calendario",
           icon: Calendar,
         },
-      ],
+        ],
     },
     { href: "/dashboard/perfil", label: "Perfil", icon: User },
+    { href: "/dashboard/asesorias/administracion", label: "Administración", icon: Settings },
     { href: "/dashboard/ayuda", label: "Ayuda", icon: HelpCircle },
   ];
 

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Rss, Search, Filter, Upload } from "lucide-react";
+import { Rss, Search, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 
 type FeedRow = {
@@ -33,9 +33,9 @@ export default function FeedsPage() {
   const [form, setForm] = useState({ materia: "", descripcion: "" });
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  // filtros desplegables eliminados; usamos pestañas con conteos
   const [dateRange, setDateRange] = useState<"all" | "today" | "7d" | "30d">(
-    "all"
+    "today"
   );
   const maxLen = 500;
   const [selfAvatarUrl, setSelfAvatarUrl] = useState<string | null>(null);
@@ -70,6 +70,43 @@ export default function FeedsPage() {
       return textMatch && inRange(it.hora);
     });
   }, [items, q, dateRange]);
+
+  // Pestañas con conteo: calcula resultados por texto y conteos por rango
+  const baseByText = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return items;
+    return items.filter((it) =>
+      it.materia.toLowerCase().includes(t) ||
+      it.descripcion.toLowerCase().includes(t) ||
+      (it.usuario ?? "").toLowerCase().includes(t) ||
+      (it.universidad ?? "").toLowerCase().includes(t)
+    );
+  }, [items, q]);
+
+  const inRangeTab = (iso: string, range: "all" | "today" | "7d" | "30d") => {
+    if (range === "all") return true;
+    const now = new Date();
+    const d = new Date(iso);
+    if (range === "today") return d.toDateString() === now.toDateString();
+    if (range === "7d") {
+      const past = new Date(now);
+      past.setDate(now.getDate() - 7);
+      return d >= past && d <= now;
+    }
+    if (range === "30d") {
+      const past = new Date(now);
+      past.setDate(now.getDate() - 30);
+      return d >= past && d <= now;
+    }
+    return true;
+  };
+
+  const counts = useMemo(() => ({
+    all: baseByText.length,
+    today: baseByText.filter((it) => inRangeTab(it.hora, "today")).length,
+    d7: baseByText.filter((it) => inRangeTab(it.hora, "7d")).length,
+    d30: baseByText.filter((it) => inRangeTab(it.hora, "30d")).length,
+  }), [baseByText]);
 
   const load = async () => {
     try {
@@ -229,9 +266,9 @@ export default function FeedsPage() {
         </div>
       </div>
 
-      {/* Barra de búsqueda */}
+      {/* Barra de búsqueda y pestañas */}
       <div className="flex flex-col md:flex-row gap-4 justify-between">
-        <div className="flex gap-4 flex-1">
+        <div className="flex gap-4 flex-1 items-center">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
@@ -242,61 +279,27 @@ export default function FeedsPage() {
               className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
-          <div className="relative">
-            <button
-              onClick={() => setShowFilters((v) => !v)}
-              className="flex items-center gap-2 bg-slate-800 border border-slate-700 text-slate-300 px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors"
-            >
-              <Filter className="h-4 w-4" /> Filtros
-            </button>
-            {showFilters && (
-              <div className="absolute z-10 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-900 p-3 shadow-lg">
-                <p className="text-xs text-slate-400 mb-2">Filtrar por fecha</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setDateRange("all")}
-                    className={`px-2 py-1 rounded border ${
-                      dateRange === "all"
-                        ? "border-purple-500 text-purple-300"
-                        : "border-slate-700 text-slate-300 hover:border-slate-600"
-                    }`}
-                  >
-                    Todas
-                  </button>
-                  <button
-                    onClick={() => setDateRange("today")}
-                    className={`px-2 py-1 rounded border ${
-                      dateRange === "today"
-                        ? "border-purple-500 text-purple-300"
-                        : "border-slate-700 text-slate-300 hover:border-slate-600"
-                    }`}
-                  >
-                    Hoy
-                  </button>
-                  <button
-                    onClick={() => setDateRange("7d")}
-                    className={`px-2 py-1 rounded border ${
-                      dateRange === "7d"
-                        ? "border-purple-500 text-purple-300"
-                        : "border-slate-700 text-slate-300 hover:border-slate-600"
-                    }`}
-                  >
-                    Últimos 7 días
-                  </button>
-                  <button
-                    onClick={() => setDateRange("30d")}
-                    className={`px-2 py-1 rounded border ${
-                      dateRange === "30d"
-                        ? "border-purple-500 text-purple-300"
-                        : "border-slate-700 text-slate-300 hover:border-slate-600"
-                    }`}
-                  >
-                    Últimos 30 días
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className="flex gap-2 text-sm">
+            {([
+              { k: "today", label: "Hoy", n: counts.today },
+              { k: "7d", label: "7 días", n: counts.d7 },
+              { k: "30d", label: "30 días", n: counts.d30 },
+              { k: "all", label: "Todos", n: counts.all },
+            ] as const).map((t) => (
+              <button
+                key={t.k}
+                onClick={() => setDateRange(t.k as any)}
+                className={`px-3 py-1.5 rounded-lg border ${
+                  dateRange === (t.k as any)
+                    ? "bg-purple-600 text-white border-purple-600"
+                    : "border-slate-700 text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                {t.label} <span className="opacity-80">({t.n})</span>
+              </button>
+            ))}
           </div>
+          {/* Botón de filtros eliminado: pestañas cubren el filtrado por fecha */}
         </div>
       </div>
 
