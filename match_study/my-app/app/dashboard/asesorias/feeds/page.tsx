@@ -75,11 +75,12 @@ export default function FeedsPage() {
   const baseByText = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return items;
-    return items.filter((it) =>
-      it.materia.toLowerCase().includes(t) ||
-      it.descripcion.toLowerCase().includes(t) ||
-      (it.usuario ?? "").toLowerCase().includes(t) ||
-      (it.universidad ?? "").toLowerCase().includes(t)
+    return items.filter(
+      (it) =>
+        it.materia.toLowerCase().includes(t) ||
+        it.descripcion.toLowerCase().includes(t) ||
+        (it.usuario ?? "").toLowerCase().includes(t) ||
+        (it.universidad ?? "").toLowerCase().includes(t)
     );
   }, [items, q]);
 
@@ -101,12 +102,15 @@ export default function FeedsPage() {
     return true;
   };
 
-  const counts = useMemo(() => ({
-    all: baseByText.length,
-    today: baseByText.filter((it) => inRangeTab(it.hora, "today")).length,
-    d7: baseByText.filter((it) => inRangeTab(it.hora, "7d")).length,
-    d30: baseByText.filter((it) => inRangeTab(it.hora, "30d")).length,
-  }), [baseByText]);
+  const counts = useMemo(
+    () => ({
+      all: baseByText.length,
+      today: baseByText.filter((it) => inRangeTab(it.hora, "today")).length,
+      d7: baseByText.filter((it) => inRangeTab(it.hora, "7d")).length,
+      d30: baseByText.filter((it) => inRangeTab(it.hora, "30d")).length,
+    }),
+    [baseByText]
+  );
 
   const load = async () => {
     try {
@@ -280,17 +284,19 @@ export default function FeedsPage() {
             />
           </div>
           <div className="flex gap-2 text-sm">
-            {([
-              { k: "today", label: "Hoy", n: counts.today },
-              { k: "7d", label: "7 días", n: counts.d7 },
-              { k: "30d", label: "30 días", n: counts.d30 },
-              { k: "all", label: "Todos", n: counts.all },
-            ] as const).map((t) => (
+            {(
+              [
+                { k: "today", label: "Hoy", n: counts.today },
+                { k: "7d", label: "7 días", n: counts.d7 },
+                { k: "30d", label: "30 días", n: counts.d30 },
+                { k: "all", label: "Todos", n: counts.all },
+              ] as const
+            ).map((t) => (
               <button
                 key={t.k}
-                onClick={() => setDateRange(t.k as any)}
+                onClick={() => setDateRange(t.k)}
                 className={`px-3 py-1.5 rounded-lg border ${
-                  dateRange === (t.k as any)
+                  dateRange === t.k
                     ? "bg-purple-600 text-white border-purple-600"
                     : "border-slate-700 text-slate-300 hover:bg-slate-800"
                 }`}

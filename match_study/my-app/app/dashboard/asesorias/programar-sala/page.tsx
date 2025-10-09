@@ -16,7 +16,10 @@ export default function ProgramarSalaPage() {
   // Formulario sala
   const [titulo, setTitulo] = useState("");
   const [fechaHora, setFechaHora] = useState("");
-  const [resultado, setResultado] = useState<{ url: string; code: string } | null>(null);
+  const [resultado, setResultado] = useState<{
+    url: string;
+    code: string;
+  } | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [asesor, setAsesor] = useState("");
   const [estudiante, setEstudiante] = useState("");
@@ -37,13 +40,19 @@ export default function ProgramarSalaPage() {
   function genCode(len = 8) {
     const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
     let out = "";
-    const rnd = globalThis.crypto?.getRandomValues
-      ? (n: number) => {
-          const arr = new Uint32Array(n);
-          crypto.getRandomValues(arr);
-          return Array.from(arr);
-        }
-      : (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 0xffffffff));
+    const rnd =
+      typeof globalThis !== "undefined" &&
+      globalThis.crypto &&
+      globalThis.crypto.getRandomValues
+        ? (n: number) => {
+            const arr = new Uint32Array(n);
+            globalThis.crypto.getRandomValues(arr);
+            return Array.from(arr);
+          }
+        : (n: number) =>
+            Array.from({ length: n }, () =>
+              Math.floor(Math.random() * 0xffffffff)
+            );
     const r = rnd(len);
     for (let i = 0; i < len; i++) out += chars[r[i] % chars.length];
     return out;
@@ -71,7 +80,10 @@ export default function ProgramarSalaPage() {
       try {
         setLoadingUsers(true);
         setUsersErr(null);
-        const res = await fetch("/api/users", { cache: "no-store", credentials: "include" });
+        const res = await fetch("/api/users", {
+          cache: "no-store",
+          credentials: "include",
+        });
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || "Error cargando usuarios");
         const base = (json.data || []) as UIUser[];
@@ -101,11 +113,12 @@ export default function ProgramarSalaPage() {
     return base.filter(
       (u) =>
         `${u.nombres} ${u.apellidos}`.toLowerCase().includes(t) ||
-        (u.email ?? "").toLowerCase().includes(t),
+        (u.email ?? "").toLowerCase().includes(t)
     );
   }, [users, qs, selfEmail]);
 
-  const displayNameOf = (u: UIUser) => `${u.nombres ?? ""} ${u.apellidos ?? ""}`.trim();
+  const displayNameOf = (u: UIUser) =>
+    `${u.nombres ?? ""} ${u.apellidos ?? ""}`.trim();
 
   const onSelectUser = (u: UIUser) => {
     setSelected(u);
@@ -122,7 +135,14 @@ export default function ProgramarSalaPage() {
       // Insertar en la tabla salas (campos: id, hora, codigoSala, titulo, asesor, estudiante, fecha)
       const hora = new Date().toISOString();
       const fecha = fechaHora || null;
-      const payload: Record<string, any> = {
+      const payload: {
+        hora: string;
+        codigoSala: string;
+        titulo: string | null;
+        asesor: string | null;
+        estudiante: string | null;
+        fecha: string | null;
+      } = {
         hora,
         codigoSala,
         titulo: titulo || null,
@@ -138,39 +158,39 @@ export default function ProgramarSalaPage() {
 
       // Enviar correos de notificación
       try {
-        const when = fecha ? new Date(fecha).toLocaleString() : new Date().toLocaleString();
+        const when = fecha
+          ? new Date(fecha).toLocaleString()
+          : new Date().toLocaleString();
         const subject = `Sesión programada: ${titulo || codigoSala}`;
-        const message = `Se ha programado una nueva sala de asesoría.\n\nTítulo: ${titulo || "(sin título)"}\nFecha/Hora: ${when}\n\nIngresa a MatchStudy para ver los detalles de la sesión.`;
+        const message = `Se ha programado una nueva sala de asesoría.\n\nTítulo: ${
+          titulo || "(sin título)"
+        }\nFecha/Hora: ${when}\n\nIngresa a MatchStudy para ver los detalles de la sesión.`;
         const sendTo = async (to?: string | null) => {
           if (!to) return;
           await fetch("/api/messages/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({ to, subject, message, fromName: "MatchStudy" }),
+            body: JSON.stringify({
+              to,
+              subject,
+              message,
+              fromName: "MatchStudy",
+            }),
           });
         };
-        await Promise.all([
-          sendTo(asesor || selfEmail),
-          sendTo(estudiante),
-        ]);
+        await Promise.all([sendTo(asesor || selfEmail), sendTo(estudiante)]);
       } catch (mailErr) {
-        console.warn("No se pudo enviar alguna notificación de correo", mailErr);
+        console.warn(
+          "No se pudo enviar alguna notificación de correo",
+          mailErr
+        );
       }
 
       setResultado({ url, code: codigoSala });
       setOkMsg("Se envió la notificación por correo a los participantes.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al programar");
-    }
-  };
-
-  const copy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      alert("Enlace copiado");
-    } catch {
-      // noop
     }
   };
 
@@ -183,7 +203,9 @@ export default function ProgramarSalaPage() {
             Programar sesiones
           </h1>
         </div>
-        <p className="text-slate-400">Crea un enlace de videollamada y compártelo.</p>
+        <p className="text-slate-400">
+          Crea un enlace de videollamada y compártelo.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -216,8 +238,12 @@ export default function ProgramarSalaPage() {
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="text-white font-medium truncate">{displayNameOf(u)}</div>
-                    <div className="text-slate-500 text-[11px] truncate">{u.email}</div>
+                    <div className="text-white font-medium truncate">
+                      {displayNameOf(u)}
+                    </div>
+                    <div className="text-slate-500 text-[11px] truncate">
+                      {u.email}
+                    </div>
                   </div>
                 </button>
               ))}
@@ -229,19 +255,27 @@ export default function ProgramarSalaPage() {
           <div className="border-b border-slate-800 pb-3 mb-3 min-h-[44px] flex items-center">
             {selected ? (
               <div>
-                <div className="text-xs text-slate-400">Estudiante seleccionado</div>
-                <div className="text-white font-semibold">{displayNameOf(selected)}</div>
+                <div className="text-xs text-slate-400">
+                  Estudiante seleccionado
+                </div>
+                <div className="text-white font-semibold">
+                  {displayNameOf(selected)}
+                </div>
                 <div className="text-slate-400 text-xs">{selected.email}</div>
               </div>
             ) : (
-              <div className="text-slate-400 text-sm">Selecciona un usuario para rellenar el estudiante</div>
+              <div className="text-slate-400 text-sm">
+                Selecciona un usuario para rellenar el estudiante
+              </div>
             )}
           </div>
 
           <form onSubmit={onProgramar} className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-slate-300 mb-1">Título</label>
+                <label className="block text-sm text-slate-300 mb-1">
+                  Título
+                </label>
                 <input
                   type="text"
                   value={titulo}
@@ -251,7 +285,9 @@ export default function ProgramarSalaPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-300 mb-1">Fecha y hora</label>
+                <label className="block text-sm text-slate-300 mb-1">
+                  Fecha y hora
+                </label>
                 <input
                   type="datetime-local"
                   value={fechaHora}
@@ -263,7 +299,9 @@ export default function ProgramarSalaPage() {
 
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-slate-300 mb-1">Asesor</label>
+                <label className="block text-sm text-slate-300 mb-1">
+                  Asesor
+                </label>
                 <input
                   type="text"
                   value={asesor}
@@ -273,7 +311,9 @@ export default function ProgramarSalaPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-300 mb-1">Estudiante</label>
+                <label className="block text-sm text-slate-300 mb-1">
+                  Estudiante
+                </label>
                 <input
                   type="text"
                   value={estudiante}
@@ -287,7 +327,10 @@ export default function ProgramarSalaPage() {
             {error && <p className="text-sm text-red-400">{error}</p>}
 
             <div className="flex gap-3">
-              <button type="submit" className="px-5 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700">
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700"
+              >
                 Generar enlace
               </button>
               <button
@@ -309,7 +352,9 @@ export default function ProgramarSalaPage() {
             <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-2">
               <h3 className="text-white font-semibold">Enlace generado</h3>
               {okMsg && <p className="text-slate-300">{okMsg}</p>}
-              <p className="text-slate-500 text-sm break-all">Código: {resultado.code}</p>
+              <p className="text-slate-500 text-sm break-all">
+                Código: {resultado.code}
+              </p>
               <div className="pt-2">
                 <button
                   onClick={() => {
@@ -321,7 +366,8 @@ export default function ProgramarSalaPage() {
                     setResultado(null);
                     setOkMsg(null);
                     setError(null);
-                    if (selfEmail) setAsesor(selfEmail); else setAsesor("");
+                    if (selfEmail) setAsesor(selfEmail);
+                    else setAsesor("");
                   }}
                   className="px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700"
                 >

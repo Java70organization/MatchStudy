@@ -82,10 +82,10 @@ export async function GET() {
         const fullName = `${nombres ?? ""} ${apellidos ?? ""}`.trim();
         const usuario = fullName || f.usuario;
         return {
-          id: (f as any).id,
+          id: (f as { id: number }).id,
           hora: f.hora,
           usuario,
-          email: (f as any).email ?? null,
+          email: (f as { email?: string }).email ?? null,
           materia: f.materia,
           descripcion: f.descripcion,
           likes: 0,

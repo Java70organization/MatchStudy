@@ -19,7 +19,9 @@ export default function MaterialesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [dateRange, setDateRange] = useState<"all" | "today" | "7d" | "30d">("today");
+  const [dateRange, setDateRange] = useState<"all" | "today" | "7d" | "30d">(
+    "today"
+  );
 
   // Formulario de subida
   const [form, setForm] = useState({ materia: "", descripcion: "" });
@@ -77,14 +79,20 @@ export default function MaterialesPage() {
     return true;
   };
 
-  const counts = useMemo(() => ({
-    all: baseByText.length,
-    today: baseByText.filter((it) => inRange(it.hora, "today")).length,
-    d7: baseByText.filter((it) => inRange(it.hora, "7d")).length,
-    d30: baseByText.filter((it) => inRange(it.hora, "30d")).length,
-  }), [baseByText]);
+  const counts = useMemo(
+    () => ({
+      all: baseByText.length,
+      today: baseByText.filter((it) => inRange(it.hora, "today")).length,
+      d7: baseByText.filter((it) => inRange(it.hora, "7d")).length,
+      d30: baseByText.filter((it) => inRange(it.hora, "30d")).length,
+    }),
+    [baseByText]
+  );
 
-  const filtered = useMemo(() => baseByText.filter((it) => inRange(it.hora, dateRange)), [baseByText, dateRange]);
+  const filtered = useMemo(
+    () => baseByText.filter((it) => inRange(it.hora, dateRange)),
+    [baseByText, dateRange]
+  );
 
   const onUpload = async () => {
     try {
@@ -207,17 +215,19 @@ export default function MaterialesPage() {
           />
         </div>
         <div className="flex gap-2 text-sm">
-          {([
-            { k: "today", label: "Hoy", n: counts.today },
-            { k: "7d", label: "7 días", n: counts.d7 },
-            { k: "30d", label: "30 días", n: counts.d30 },
-            { k: "all", label: "Todos", n: counts.all },
-          ] as const).map((t) => (
+          {(
+            [
+              { k: "today", label: "Hoy", n: counts.today },
+              { k: "7d", label: "7 días", n: counts.d7 },
+              { k: "30d", label: "30 días", n: counts.d30 },
+              { k: "all", label: "Todos", n: counts.all },
+            ] as const
+          ).map((t) => (
             <button
               key={t.k}
-              onClick={() => setDateRange(t.k as any)}
+              onClick={() => setDateRange(t.k)}
               className={`px-3 py-1.5 rounded-lg border ${
-                dateRange === (t.k as any)
+                dateRange === t.k
                   ? "bg-purple-600 text-white border-purple-600"
                   : "border-slate-700 text-slate-300 hover:bg-slate-800"
               }`}
