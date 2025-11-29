@@ -1,3 +1,4 @@
+// components/layout/Topbar.tsx (reemplaza tu archivo actual)
 "use client";
 import { Menu, User } from "lucide-react";
 import Link from "next/link";
@@ -6,13 +7,13 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase/client";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { checkUserProfile } from "@/lib/supabase/user";
+import NotificationBell from "../dashboard/NotificationBell";
 
 export default function Topbar({ onToggle }: { onToggle: () => void }) {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
 
-  // Obtener usuario de Supabase
   useEffect(() => {
     const getUser = async () => {
       const {
@@ -35,6 +36,7 @@ export default function Topbar({ onToggle }: { onToggle: () => void }) {
         } else {
           setPhotoUrl(null);
         }
+        setDisplayName(user.user_metadata?.full_name ?? null);
       } else {
         setPhotoUrl(null);
         setDisplayName(null);
@@ -43,7 +45,6 @@ export default function Topbar({ onToggle }: { onToggle: () => void }) {
 
     getUser();
 
-    // Escuchar cambios en la autenticación
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
@@ -66,7 +67,6 @@ export default function Topbar({ onToggle }: { onToggle: () => void }) {
           } else {
             setPhotoUrl(null);
           }
-          // Usar metadata si existe
           setDisplayName(session?.user?.user_metadata?.full_name ?? null);
         })();
       } else {
@@ -107,6 +107,13 @@ export default function Topbar({ onToggle }: { onToggle: () => void }) {
       }
     };
   }, []);
+
+  const nameToShow =
+    displayName ||
+    user?.user_metadata?.full_name ||
+    user?.email?.split("@")[0] ||
+    "Usuario";
+
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-800 bg-slate-950/70 backdrop-blur w-full">
       {/* Lado izquierdo: Botón de menú en móvil */}
@@ -121,14 +128,15 @@ export default function Topbar({ onToggle }: { onToggle: () => void }) {
         </button>
       </div>
 
-      {/* Lado derecho: Información del usuario */}
+      {/* Lado derecho: usuario + notificaciones */}
       <div className="flex items-center gap-3 lg:flex-shrink-0 pr-4 lg:pr-8">
-        <span className="text-sm text-slate-300 hidden sm:block">
-          Hola {" "}
-          {displayName || user?.user_metadata?.full_name ||
-            user?.email?.split("@")[0] ||
-            "Usuario"}
+        <span className="hidden text-sm text-slate-300 sm:block">
+          Hola {nameToShow}
         </span>
+
+        {/* Icono de notificaciones */}
+        <NotificationBell />
+
         <Link href="/dashboard/perfil" className="flex items-center">
           {photoUrl ? (
             <Image
@@ -136,11 +144,11 @@ export default function Topbar({ onToggle }: { onToggle: () => void }) {
               alt="Foto de perfil"
               width={32}
               height={32}
-              className="w-8 h-8 rounded-full object-cover border border-slate-700"
+              className="h-8 w-8 rounded-full border border-slate-700 object-cover"
               unoptimized
             />
           ) : (
-            <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center border border-slate-700 hover:bg-purple-500 transition-colors">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 bg-purple-600 hover:bg-purple-500 transition-colors">
               <User className="h-4 w-4 text-white" />
             </div>
           )}
