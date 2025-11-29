@@ -39,6 +39,19 @@ type FeedRow = {
 type DateRange = "all" | "today" | "7d" | "30d";
 type SortBy = "recent" | "likes" | "comments";
 
+type FeedLikeRow = {
+  feed_id: number;
+};
+
+type FeedCommentRow = {
+  id: number;
+  feed_id: number;
+  user_email: string;
+  texto: string;
+  images: string[] | null;
+  created_at: string;
+};
+
 function timeAgo(dateStr: string) {
   const d = new Date(dateStr);
   const diff = Date.now() - d.getTime();
@@ -67,8 +80,8 @@ async function filesToBase64(files: FileList | null): Promise<string[]> {
           reader.onload = () => resolve(String(reader.result));
           reader.onerror = () => reject(reader.error);
           reader.readAsDataURL(file);
-        })
-    )
+        }),
+    ),
   );
   return results;
 }
@@ -135,25 +148,25 @@ export default function FeedsPage() {
         categoryFilter === "all" || cat.toLowerCase() === categoryFilter;
       return textMatch && rangeMatch && catMatch;
     });
-  }, [items, q, dateRange, categoryFilter, now]);
+  }, [items, q, dateRange, categoryFilter, now, inRange]);
 
   const visibleItems = useMemo(() => {
     const arr = [...baseFiltered];
     if (sortBy === "recent") {
       arr.sort(
-        (a, b) => new Date(b.hora).getTime() - new Date(a.hora).getTime()
+        (a, b) => new Date(b.hora).getTime() - new Date(a.hora).getTime(),
       );
     } else if (sortBy === "likes") {
       arr.sort(
         (a, b) =>
           (b.likes ?? 0) - (a.likes ?? 0) ||
-          new Date(b.hora).getTime() - new Date(a.hora).getTime()
+          new Date(b.hora).getTime() - new Date(a.hora).getTime(),
       );
     } else if (sortBy === "comments") {
       arr.sort(
         (a, b) =>
           (b.comments?.length ?? 0) - (a.comments?.length ?? 0) ||
-          new Date(b.hora).getTime() - new Date(a.hora).getTime()
+          new Date(b.hora).getTime() - new Date(a.hora).getTime(),
       );
     }
     return arr;
@@ -167,7 +180,7 @@ export default function FeedsPage() {
         it.materia.toLowerCase().includes(t) ||
         it.descripcion.toLowerCase().includes(t) ||
         (it.usuario ?? "").toLowerCase().includes(t) ||
-        (it.universidad ?? "").toLowerCase().includes(t)
+        (it.universidad ?? "").toLowerCase().includes(t),
     );
   }, [items, q]);
 
@@ -178,7 +191,7 @@ export default function FeedsPage() {
       d7: baseByText.filter((it) => inRange(it.hora, "7d")).length,
       d30: baseByText.filter((it) => inRange(it.hora, "30d")).length,
     }),
-    [baseByText]
+    [baseByText, inRange],
   );
 
   const categories = useMemo(() => {
@@ -219,8 +232,10 @@ export default function FeedsPage() {
           .select("feed_id")
           .in("feed_id", ids);
 
+        const likesRows: FeedLikeRow[] = (likesData as FeedLikeRow[] | null) ?? [];
         const likesMap = new Map<number, number>();
-        (likesData || []).forEach((row: any) => {
+
+        likesRows.forEach((row) => {
           likesMap.set(row.feed_id, (likesMap.get(row.feed_id) ?? 0) + 1);
         });
 
@@ -231,8 +246,11 @@ export default function FeedsPage() {
           .in("feed_id", ids)
           .order("created_at", { ascending: true });
 
+        const commentRows: FeedCommentRow[] =
+          (commentsData as FeedCommentRow[] | null) ?? [];
         const commentsMap = new Map<number, Comment[]>();
-        (commentsData || []).forEach((row: any) => {
+
+        commentRows.forEach((row) => {
           const c: Comment = {
             id: String(row.id),
             author: row.user_email,
@@ -269,9 +287,7 @@ export default function FeedsPage() {
       try {
         const { data: u } = await supabase.auth.getUser();
         const nameInitial =
-          (u?.user?.user_metadata?.full_name as string | undefined)?.charAt(
-            0
-          ) ||
+          (u?.user?.user_metadata?.full_name as string | undefined)?.charAt(0) ||
           u?.user?.email?.charAt(0) ||
           "U";
         setSelfInitial(nameInitial.toUpperCase());
@@ -305,7 +321,6 @@ export default function FeedsPage() {
         "Usuario";
       const nowIso = new Date().toISOString();
 
-      // Insert en tabla feeds (incluyendo images y categoria)
       const { data, error } = await supabase
         .from("feeds")
         .insert({
@@ -315,7 +330,7 @@ export default function FeedsPage() {
           descripcion: form.descripcion.trim(),
           email: u.user.email,
           categoria: form.categoria.trim() || "General",
-          images: newPostImages, // text[]
+          images: newPostImages,
         })
         .select()
         .single();
@@ -353,7 +368,6 @@ export default function FeedsPage() {
 
       const email = u.user.email;
 
-      // Un like por usuario
       const { error: likeError } = await supabase
         .from("feed_likes")
         .upsert(
@@ -361,7 +375,7 @@ export default function FeedsPage() {
             feed_id: feed.id,
             user_email: email,
           },
-          { onConflict: "feed_id,user_email" }
+          { onConflict: "feed_id,user_email" },
         );
 
       if (likeError) throw likeError;
@@ -371,12 +385,11 @@ export default function FeedsPage() {
         .select("feed_id")
         .eq("feed_id", feed.id);
 
-      const likesCount = likesData?.length ?? 0;
+      const likesRows: FeedLikeRow[] = (likesData as FeedLikeRow[] | null) ?? [];
+      const likesCount = likesRows.length;
 
       setItems((prev) =>
-        prev.map((p) =>
-          p.id === feed.id ? { ...p, likes: likesCount } : p
-        )
+        prev.map((p) => (p.id === feed.id ? { ...p, likes: likesCount } : p)),
       );
     } catch (e) {
       console.error("Error dando like:", e);
@@ -396,7 +409,7 @@ export default function FeedsPage() {
 
   const handleCommentImagesChange = async (
     key: string,
-    e: React.ChangeEvent<HTMLInputElement>
+    e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const images = await filesToBase64(e.target.files);
     setCommentDrafts((prev) => ({
@@ -447,8 +460,8 @@ export default function FeedsPage() {
         prev.map((p) =>
           p.id === feed.id
             ? { ...p, comments: [...(p.comments ?? []), newComment] }
-            : p
-        )
+            : p,
+        ),
       );
 
       setCommentDrafts((prev) => ({
@@ -461,7 +474,7 @@ export default function FeedsPage() {
   };
 
   const handleNewPostImagesChange = async (
-    e: React.ChangeEvent<HTMLInputElement>
+    e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const images = await filesToBase64(e.target.files);
     setNewPostImages(images);
@@ -525,7 +538,7 @@ export default function FeedsPage() {
 
         <div className="flex flex-col gap-3 md:w-80">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 w-16">Categoría</span>
+            <span className="w-16 text-xs text-slate-400">Categoría</span>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
@@ -540,7 +553,7 @@ export default function FeedsPage() {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 w-16">Ordenar</span>
+            <span className="w-16 text-xs text-slate-400">Ordenar</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortBy)}
@@ -610,7 +623,7 @@ export default function FeedsPage() {
                     <h3 className="mt-1 text-sm font-semibold text-white">
                       {f.materia}
                     </h3>
-                    <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                    <p className="whitespace-pre-wrap text-sm text-slate-200">
                       {f.descripcion}
                     </p>
 
@@ -649,13 +662,13 @@ export default function FeedsPage() {
                     </div>
 
                     {commentsOpen && (
-                      <div className="mt-3 space-y-3 rounded-2xl bg-slate-900/80 p-3 border border-slate-800">
+                      <div className="mt-3 space-y-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
                         <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
                           {f.comments && f.comments.length > 0 ? (
                             f.comments.map((c) => (
                               <div
                                 key={c.id}
-                                className="rounded-xl bg-slate-900 p-2 text-xs text-slate-100 border border-slate-800"
+                                className="rounded-xl border border-slate-800 bg-slate-900 p-2 text-xs text-slate-100"
                               >
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="font-semibold">
@@ -856,7 +869,7 @@ export default function FeedsPage() {
               )}
 
               {error && (
-                <p className="text-xs text-red-400 pt-1">{error}</p>
+                <p className="pt-1 text-xs text-red-400">{error}</p>
               )}
 
               <div className="mt-3 flex justify-end gap-2">
