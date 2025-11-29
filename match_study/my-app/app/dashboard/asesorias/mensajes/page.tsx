@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { MessageSquare, Search, Plus, Send } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -356,7 +356,7 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
       await markConversationRead(conversationId, currentEmail);
     };
 
-    load();
+    void load();
   }, [conversationId, currentEmail]);
 
   // Realtime: escuchar nuevos mensajes de esta conversación
@@ -519,14 +519,12 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                             PÁGINA PRINCIPAL                               */
+/*                        PÁGINA INTERNA (CON SEARCHPARAMS)                   */
 /* -------------------------------------------------------------------------- */
 
-export default function MensajesPage() {
+function MensajesPageInner() {
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<ConversationSummary[]>(
-    []
-  );
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedOtherUser, setSelectedOtherUser] = useState<Profile | null>(
@@ -564,7 +562,7 @@ export default function MensajesPage() {
       }
     };
 
-    load();
+    void load();
   }, [currentEmail, params]);
 
   // Realtime: refrescar lista de conversaciones cuando haya nuevos mensajes
@@ -676,5 +674,23 @@ export default function MensajesPage() {
         />
       )}
     </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                         WRAPPER CON <Suspense> (FIX)                       */
+/* -------------------------------------------------------------------------- */
+
+export default function MensajesPage() {
+  return (
+    <Suspense
+      fallback={
+        <section className="flex h-[calc(100vh-4rem)] items-center justify-center">
+          <p className="text-sm text-slate-400">Cargando mensajes...</p>
+        </section>
+      }
+    >
+      <MensajesPageInner />
+    </Suspense>
   );
 }
