@@ -38,7 +38,7 @@ function normalizePhoto(urlFoto: string | null): string | null {
  * Obtiene el perfil de un usuario por email desde la tabla `usuarios`.
  */
 export async function fetchProfileByEmail(
-  email: string
+  email: string,
 ): Promise<Profile | null> {
   const { data, error } = await supabase
     .from("usuarios")
@@ -61,7 +61,7 @@ export async function fetchProfileByEmail(
  */
 export async function getOrCreateConversation(
   currentEmail: string,
-  otherEmail: string
+  otherEmail: string,
 ): Promise<string> {
   // 1) buscar conversación existente que tenga SÓLO estos 2 participantes
   const { data: existing, error: exErr } = await supabase
@@ -79,7 +79,8 @@ export async function getOrCreateConversation(
       return acc;
     }, {});
 
-    const convId = Object.entries(grouped).find(([_, set]) => {
+    // IMPORTANT: aquí quitamos el "_" no usado usando elisión en el destructuring
+    const convId = Object.entries(grouped).find(([, set]) => {
       return (
         set.size === 2 &&
         set.has(currentEmail) &&
@@ -97,14 +98,18 @@ export async function getOrCreateConversation(
     .select("id")
     .single();
 
-  if (convErr || !conv) throw convErr || new Error("No se pudo crear la conversación");
+  if (convErr || !conv) {
+    throw convErr || new Error("No se pudo crear la conversación");
+  }
 
   const conversationId = conv.id as string;
 
-  const { error: partErr } = await supabase.from("conversation_participants").insert([
-    { conversation_id: conversationId, user_email: currentEmail },
-    { conversation_id: conversationId, user_email: otherEmail },
-  ]);
+  const { error: partErr } = await supabase
+    .from("conversation_participants")
+    .insert([
+      { conversation_id: conversationId, user_email: currentEmail },
+      { conversation_id: conversationId, user_email: otherEmail },
+    ]);
 
   if (partErr) throw partErr;
 
@@ -115,10 +120,8 @@ export async function getOrCreateConversation(
  * Obtiene todas las conversaciones del usuario y calcula último mensaje y no leídos.
  * Esta versión es correcta pero no súper optimizada (usa varias consultas).
  */
-// lib/supabase/chat.ts
-
 export async function fetchConversationsForUser(
-  currentEmail: string
+  currentEmail: string,
 ): Promise<ConversationSummary[]> {
   // 1) conversaciones donde participa el usuario
   const { data: participantRows, error } = await supabase
@@ -129,7 +132,7 @@ export async function fetchConversationsForUser(
   if (error || !participantRows) return [];
 
   const conversationIds = participantRows.map(
-    (r) => r.conversation_id as string
+    (r) => r.conversation_id as string,
   );
   if (conversationIds.length === 0) return [];
 
@@ -185,7 +188,7 @@ export async function fetchConversationsForUser(
         lastMessageAt: lastMsg?.created_at ?? null,
         unreadCount: unreadCount ?? 0,
       });
-    })
+    }),
   );
 
   // ordenar por fecha del último mensaje
@@ -200,7 +203,7 @@ export async function fetchConversationsForUser(
  * Obtiene todos los mensajes de una conversación.
  */
 export async function fetchMessages(
-  conversationId: string
+  conversationId: string,
 ): Promise<ChatMessage[]> {
   const { data, error } = await supabase
     .from("messages")
@@ -218,7 +221,7 @@ export async function fetchMessages(
 export async function sendMessage(
   conversationId: string,
   senderEmail: string,
-  content: string
+  content: string,
 ): Promise<ChatMessage | null> {
   const { data, error } = await supabase
     .from("messages")
@@ -260,7 +263,7 @@ export async function sendMessage(
           message_id: data.id,
           title: "Nuevo mensaje",
           body: content.slice(0, 80),
-        }))
+        })),
       );
     }
   }
@@ -273,7 +276,7 @@ export async function sendMessage(
  */
 export async function markConversationRead(
   conversationId: string,
-  currentEmail: string
+  currentEmail: string,
 ) {
   const now = new Date().toISOString();
   await supabase
@@ -304,13 +307,11 @@ export type MessageNotification = {
 };
 
 export async function fetchUnreadNotifications(
-  currentEmail: string
+  currentEmail: string,
 ): Promise<MessageNotification[]> {
   const { data, error } = await supabase
     .from("notifications")
-    .select(
-      "id,conversation_id,message_id,title,body,created_at"
-    )
+    .select("id,conversation_id,message_id,title,body,created_at")
     .eq("user_email", currentEmail)
     .is("read_at", null)
     .order("created_at", { ascending: false })
