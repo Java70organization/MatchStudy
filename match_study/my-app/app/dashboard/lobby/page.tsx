@@ -1,46 +1,170 @@
 "use client";
 
+import type React from "react";
 import Image from "next/image";
-import { Users, BookOpen, Video, Target } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  Users,
+  BookOpen,
+  Video,
+  Target,
+  Flame,
+  Sparkles,
+  Clock,
+  RefreshCw,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { checkUserProfile } from "@/lib/supabase/user";
 
+type FeedRow = {
+  id: number;
+  hora: string;
+  usuario: string | null;
+  materia: string | null;
+  descripcion: string | null;
+  email: string | null;
+  categoria: string | null;
+  images?: string[] | null;
+  likes_count?: number | null;
+  comments_count?: number | null;
+
+  views_72h?: number | null;
+  trend_score?: number | null;
+
+  affinity_score?: number | null;
+};
+
+type FeedSectionKey = "para_ti" | "tendencias" | "recientes";
+
+function formatDate(ts: string) {
+  try {
+    return new Date(ts).toLocaleString();
+  } catch {
+    return ts;
+  }
+}
+
 export default function LobbyPage() {
   const [loading, setLoading] = useState(true);
+  const [feedLoading, setFeedLoading] = useState(false);
+
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<FeedSectionKey>("para_ti");
+
+  const [feedsParaTi, setFeedsParaTi] = useState<FeedRow[]>([]);
+  const [feedsTendencias, setFeedsTendencias] = useState<FeedRow[]>([]);
+  const [feedsRecientes, setFeedsRecientes] = useState<FeedRow[]>([]);
+
+  const [showIntake, setShowIntake] = useState(false);
+  const [intakeText, setIntakeText] = useState("");
+
+  const [uiError, setUiError] = useState<string | null>(null);
+
+  const sections = useMemo(
+    () => [
+      { key: "para_ti" as const, label: "Para ti", icon: Sparkles },
+      { key: "tendencias" as const, label: "Tendencias", icon: Flame },
+      { key: "recientes" as const, label: "Recientes", icon: Clock },
+    ],
+    [],
+  );
+
+  const logEvent = async (
+    email: string,
+    event_type: string,
+    entity_type: "feed" | "material" | "sala",
+    entity_id: number,
+    meta: Record<string, any> = {},
+  ) => {
+    try {
+      await supabase.from("user_events").insert({
+        user_email: email,
+        event_type,
+        entity_type,
+        entity_id,
+        meta,
+      });
+    } catch {
+      // silent
+    }
+  };
+
+  const loadFeedSections = async (email: string) => {
+    setFeedLoading(true);
+    setUiError(null);
+
+    try {
+      // 1) Para ti: RPC
+      const { data: paraTi, error: errPT } = await supabase.rpc(
+        "get_feeds_para_ti",
+        {
+          p_user_email: email,
+          p_limit: 12,
+        },
+      );
+
+      // 2) Tendencias: view
+      const { data: tendencias, error: errT } = await supabase
+        .from("feeds_tendencias")
+        .select("*")
+        .limit(12);
+
+      // 3) Recientes: view
+      const { data: recientes, error: errR } = await supabase
+        .from("feeds_recientes")
+        .select("*")
+        .limit(12);
+
+      // Log de errores (y a UI)
+      if (errPT) setUiError(`Para ti: ${errPT.message}`);
+      else if (errT) setUiError(`Tendencias: ${errT.message}`);
+      else if (errR) setUiError(`Recientes: ${errR.message}`);
+
+      const pt = (paraTi as FeedRow[]) ?? [];
+      const td = (tendencias as FeedRow[]) ?? [];
+      const rc = (recientes as FeedRow[]) ?? [];
+
+      setFeedsParaTi(pt);
+      setFeedsTendencias(td);
+      setFeedsRecientes(rc);
+
+      // Si “Para ti” está vacío:
+      // - muestra intake
+      // - y deja fallback en UI (si el tab para_ti está vacío, enseñamos recientes en currentFeeds)
+      setShowIntake(pt.length === 0);
+    } finally {
+      setFeedLoading(false);
+    }
+  };
 
   useEffect(() => {
     const checkUserProfileOnLoad = async () => {
       try {
-        // Verificar si hay usuario autenticado
         const {
           data: { user },
           error: authError,
         } = await supabase.auth.getUser();
 
         if (authError || !user) {
-          // No hay usuario autenticado, redirigir al login
           window.location.href = "/auth/login";
           return;
         }
 
-        const userEmail = user.email;
-        if (userEmail) {
-          // Verificar si el usuario tiene perfil en la tabla usuarios
-          const userProfile = await checkUserProfile(userEmail);
+        const email = user.email ?? null;
+        setUserEmail(email);
 
+        if (email) {
+          const userProfile = await checkUserProfile(email);
           if (!userProfile) {
-            // No tiene perfil, redirigir a completar perfil
-            console.log("Usuario sin perfil, redirigiendo a completar perfil");
             window.location.href = "/auth/completar-perfil";
             return;
           }
 
-          console.log("Usuario con perfil existente:", userProfile);
+          await loadFeedSections(email);
         }
       } catch (error) {
         console.error("Error verificando perfil:", error);
-        // En caso de error, permitir continuar al dashboard
+        setUiError("Error verificando perfil");
       } finally {
         setLoading(false);
       }
@@ -49,11 +173,49 @@ export default function LobbyPage() {
     checkUserProfileOnLoad();
   }, []);
 
+  // ✅ Fallback: si está en "para_ti" y viene vacío -> mostramos recientes
+  const currentFeeds: FeedRow[] = useMemo(() => {
+    if (activeSection === "para_ti") {
+      return feedsParaTi.length > 0 ? feedsParaTi : feedsRecientes;
+    }
+    if (activeSection === "tendencias") return feedsTendencias;
+    return feedsRecientes;
+  }, [activeSection, feedsParaTi, feedsTendencias, feedsRecientes]);
+
+  const onSubmitIntake = async () => {
+    if (!userEmail) return;
+    const text = intakeText.trim();
+    if (!text) return;
+
+    // Guardar intake como evento
+    await supabase.from("user_events").insert({
+      user_email: userEmail,
+      event_type: "intake_submit",
+      entity_type: "feed",
+      entity_id: 0,
+      meta: { text },
+    });
+
+    setShowIntake(false);
+    setIntakeText("");
+
+    await loadFeedSections(userEmail);
+  };
+
+  const onOpenFeed = async (feed: FeedRow) => {
+    if (userEmail) {
+      await logEvent(userEmail, "feed_view", "feed", feed.id, {
+        section: activeSection,
+      });
+    }
+    window.location.href = "/feeds";
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto" />
           <p className="text-slate-300">Verificando perfil...</p>
         </div>
       </div>
@@ -62,7 +224,6 @@ export default function LobbyPage() {
 
   return (
     <section className="space-y-8">
-      {/* Presentación de MatchStudy */}
       <div className="text-center space-y-6">
         <div className="flex justify-center mb-6">
           <Image
@@ -80,86 +241,211 @@ export default function LobbyPage() {
             Bienvenido a MatchStudy
           </h1>
           <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
-            Tu plataforma integral para conectar con compañeros de estudio,
-            compartir conocimientos y organizar sesiones colaborativas de
-            aprendizaje.
+            Tu plataforma integral para conectar con compañeros de estudio, compartir conocimientos y organizar sesiones
+            colaborativas de aprendizaje.
           </p>
         </div>
 
-        {/* Características principales */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-          <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-purple-600/20 rounded-lg">
-                <Video className="h-6 w-6 text-purple-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-white">
-                Videollamadas
-              </h3>
-            </div>
-            <p className="text-slate-300 text-sm">
-              Conéctate en tiempo real con tus compañeros para sesiones de
-              estudio colaborativas.
-            </p>
-          </div>
-
-          <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-green-600/20 rounded-lg">
-                <BookOpen className="h-6 w-6 text-green-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-white">Biblioteca</h3>
-            </div>
-            <p className="text-slate-300 text-sm">
-              Comparte y accede a materiales de estudio, apuntes y recursos
-              educativos.
-            </p>
-          </div>
-
-          <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-blue-600/20 rounded-lg">
-                <Users className="h-6 w-6 text-blue-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-white">Comunidad</h3>
-            </div>
-            <p className="text-slate-300 text-sm">
-              Encuentra Feeds con intereses similares y forma grupos de estudio
-              mediante la comunidad de MatchStudy.
-            </p>
-          </div>
+          <FeatureCard
+            title="Videollamadas"
+            icon={<Video className="h-6 w-6 text-purple-400" />}
+            iconBg="bg-purple-600/20"
+            desc="Conéctate en tiempo real con tus compañeros para sesiones de estudio colaborativas."
+          />
+          <FeatureCard
+            title="Biblioteca"
+            icon={<BookOpen className="h-6 w-6 text-green-400" />}
+            iconBg="bg-green-600/20"
+            desc="Comparte y accede a materiales de estudio, apuntes y recursos educativos."
+          />
+          <FeatureCard
+            title="Comunidad"
+            icon={<Users className="h-6 w-6 text-blue-400" />}
+            iconBg="bg-blue-600/20"
+            desc="Encuentra Feeds con intereses similares y forma grupos de estudio mediante la comunidad de MatchStudy."
+          />
         </div>
       </div>
 
-      {/* Consejos para empezar */}
-      <div className="bg-gradient-to-r from-purple-900/20 to-pink-900/20 rounded-2xl p-6 border border-purple-500/20">
-        <div className="flex items-center gap-3 mb-4">
-          <Target className="h-6 w-6 text-purple-400" />
-          <h2 className="text-xl font-semibold text-white">
-            ¿Qué puedo realizar en MatchStudy?
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div className="space-y-2">
-            <h3 className="font-medium text-purple-300">
-              Para la comunidad MatchStudy:
-            </h3>
-            <ul className="space-y-1 text-slate-300">
-              <li>• Comparte Feeds entre la comunidad</li>
-              <li>• Busca Feeds entre la comunidad de tu interés</li>
-              <li>• Crea Salas de asesorías entre la comunidad</li>
-              <li>• Busca Salas de asesorías de tu interés</li>
-              <li>• Comparte materiales en la biblioteca</li>
-              <li>• Busca materiales de tu interés</li>
-              <li>• Puedes consultar nuestro calendario de actividades</li>
-            </ul>
+      <div className="bg-slate-900/50 rounded-2xl p-6 border border-slate-800">
+        <div className="flex items-start justify-between gap-4 flex-col md:flex-row">
+          <div className="space-y-1">
+            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-purple-400" />
+              Contenido personalizado
+            </h2>
+            <p className="text-sm text-slate-300">
+              “Para ti” usa tus eventos (views/likes/comments/intake). Si no hay eventos, mostrará Recientes.
+            </p>
+
+            {uiError && (
+              <div className="mt-2 rounded-xl border border-red-500/30 bg-red-900/10 px-3 py-2 text-xs text-red-300">
+                {uiError}
+              </div>
+            )}
           </div>
+
+          <button
+            onClick={() => userEmail && loadFeedSections(userEmail)}
+            disabled={feedLoading || !userEmail}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 hover:border-purple-500/50 disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${feedLoading ? "animate-spin" : ""}`} />
+            Actualizar
+          </button>
+        </div>
+
+        {(showIntake || activeSection === "para_ti") && (
+          <div className="mt-5 rounded-2xl border border-purple-500/20 bg-gradient-to-r from-purple-900/20 to-pink-900/20 p-4">
+            <div className="flex items-center gap-2 text-white font-semibold">
+              <Target className="h-5 w-5 text-purple-400" />
+              Cuéntame qué necesitas (mejora tu “Para ti”)
+            </div>
+            <p className="mt-1 text-sm text-slate-300">
+              Ejemplo: “integrales”, “SQL joins”, “examen cálculo”.
+            </p>
+
+            <div className="mt-3 flex flex-col md:flex-row gap-3">
+              <input
+                value={intakeText}
+                onChange={(e) => setIntakeText(e.target.value)}
+                placeholder="Escribe tu objetivo o tema..."
+                className="flex-1 rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-purple-500/60"
+              />
+              <button
+                onClick={onSubmitIntake}
+                disabled={!userEmail || !intakeText.trim()}
+                className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-60"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          {sections.map(({ key, label, icon: Icon }) => {
+            const active = key === activeSection;
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveSection(key)}
+                className={[
+                  "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm border transition-all",
+                  active
+                    ? "border-purple-500/60 bg-purple-900/20 text-white"
+                    : "border-slate-800 bg-slate-950/20 text-slate-300 hover:border-purple-500/40",
+                ].join(" ")}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-5">
+          {feedLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="text-center space-y-3">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-500 mx-auto" />
+                <p className="text-slate-300 text-sm">Cargando contenido...</p>
+              </div>
+            </div>
+          ) : currentFeeds.length === 0 ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-6 text-slate-300 text-sm">
+              No hay resultados por ahora.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {currentFeeds.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => onOpenFeed(f)}
+                  className="text-left rounded-2xl border border-slate-800 bg-slate-950/20 p-4 hover:border-purple-500/40 transition-all"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="text-white font-semibold line-clamp-1">
+                        {f.materia || f.categoria || "Publicación"}
+                      </div>
+                      <div className="text-xs text-slate-400">{formatDate(f.hora)}</div>
+                    </div>
+
+                    {activeSection === "tendencias" && (
+                      <span className="text-xs rounded-lg border border-orange-500/30 bg-orange-900/10 px-2 py-1 text-orange-300">
+                        Score {f.trend_score ?? 0}
+                      </span>
+                    )}
+
+                    {activeSection === "para_ti" && (
+                      <span className="text-xs rounded-lg border border-purple-500/30 bg-purple-900/10 px-2 py-1 text-purple-300">
+                        Afinidad {Math.round((f.affinity_score ?? 0) * 10) / 10}
+                      </span>
+                    )}
+                  </div>
+
+                  {f.descripcion && (
+                    <p className="mt-2 text-sm text-slate-300 line-clamp-3">{f.descripcion}</p>
+                  )}
+
+                  <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+                    <span className="line-clamp-1">
+                      {f.usuario ? `Por ${f.usuario}` : f.email ? `Por ${f.email}` : "Autor"}
+                    </span>
+                    <span className="flex items-center gap-3">
+                      <span>👍 {f.likes_count ?? 0}</span>
+                      <span>💬 {f.comments_count ?? 0}</span>
+                      {activeSection === "tendencias" && <span>👀 {f.views_72h ?? 0}</span>}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          <QuickLink href="/feeds" label="Ir a Feeds" />
+          <QuickLink href="/salas" label="Ir a Salas" />
+          <QuickLink href="/materiales" label="Ir a Biblioteca" />
+          <QuickLink href="/mensajes" label="Mensajes" />
         </div>
       </div>
     </section>
   );
 }
 
-// UI local para esta ruta
-//function Card(props: any){ return (<div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg"><h2 className="mb-3 text-lg font-semibold">{props.title}</h2>{props.children}</div>); }
-//function QuickLink({ href, label }: { href: string; label: string }){ return (<a href={href} className="inline-flex items-center rounded-lg border border-slate-800 bg-slate-800/60 px-3 py-2 text-sm text-slate-200 hover:border-purple-500 hover:bg-slate-800">{label}</a>); }
+function FeatureCard({
+  title,
+  desc,
+  icon,
+  iconBg,
+}: {
+  title: string;
+  desc: string;
+  icon: React.ReactNode;
+  iconBg: string;
+}) {
+  return (
+    <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300">
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`p-2 rounded-lg ${iconBg}`}>{icon}</div>
+        <h3 className="text-lg font-semibold text-white">{title}</h3>
+      </div>
+      <p className="text-slate-300 text-sm">{desc}</p>
+    </div>
+  );
+}
+
+function QuickLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      className="inline-flex items-center rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-sm text-slate-200 hover:border-purple-500/50 hover:bg-slate-900/40 transition-all"
+    >
+      {label}
+    </a>
+  );
+}
