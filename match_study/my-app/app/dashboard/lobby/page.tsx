@@ -74,7 +74,7 @@ export default function LobbyPage() {
     event_type: string,
     entity_type: "feed" | "material" | "sala",
     entity_id: number,
-    meta: Record<string, any> = {},
+    meta: Record<string, unknown> = {},
   ) => {
     try {
       await supabase.from("user_events").insert({
@@ -120,9 +120,9 @@ export default function LobbyPage() {
       else if (errT) setUiError(`Tendencias: ${errT.message}`);
       else if (errR) setUiError(`Recientes: ${errR.message}`);
 
-      const pt = (paraTi as FeedRow[]) ?? [];
-      const td = (tendencias as FeedRow[]) ?? [];
-      const rc = (recientes as FeedRow[]) ?? [];
+      const pt = (paraTi ?? []) as FeedRow[];
+      const td = (tendencias ?? []) as FeedRow[];
+      const rc = (recientes ?? []) as FeedRow[];
 
       setFeedsParaTi(pt);
       setFeedsTendencias(td);
@@ -162,7 +162,7 @@ export default function LobbyPage() {
 
           await loadFeedSections(email);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error verificando perfil:", error);
         setUiError("Error verificando perfil");
       } finally {
@@ -187,7 +187,6 @@ export default function LobbyPage() {
     const text = intakeText.trim();
     if (!text) return;
 
-    // Guardar intake como evento
     await supabase.from("user_events").insert({
       user_email: userEmail,
       event_type: "intake_submit",
@@ -302,9 +301,7 @@ export default function LobbyPage() {
               <Target className="h-5 w-5 text-purple-400" />
               Cuéntame qué necesitas (mejora tu “Para ti”)
             </div>
-            <p className="mt-1 text-sm text-slate-300">
-              Ejemplo: “integrales”, “SQL joins”, “examen cálculo”.
-            </p>
+            <p className="mt-1 text-sm text-slate-300">Ejemplo: “integrales”, “SQL joins”, “examen cálculo”.</p>
 
             <div className="mt-3 flex flex-col md:flex-row gap-3">
               <input
