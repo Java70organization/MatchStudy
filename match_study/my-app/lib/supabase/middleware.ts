@@ -1,8 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { CookieOptions } from "@supabase/ssr";
 
-export function createSupabaseMiddlewareClient(request: NextRequest) {
-  let response = NextResponse.next({
+type CookieSetOptions = CookieOptions & { maxAge?: number };
+
+export async function updateSession(request: NextRequest) {
+  const response = NextResponse.next({
     request: { headers: request.headers },
   });
 
@@ -14,15 +17,18 @@ export function createSupabaseMiddlewareClient(request: NextRequest) {
         get(name: string) {
           return request.cookies.get(name)?.value;
         },
-        set(name: string, value: string, options: any) {
+        set(name: string, value: string, options: CookieSetOptions) {
           response.cookies.set({ name, value, ...options });
         },
-        remove(name: string, options: any) {
+        remove(name: string, options: CookieSetOptions) {
           response.cookies.set({ name, value: "", ...options, maxAge: 0 });
         },
       },
     },
   );
 
-  return { supabase, response };
+  // refresca cookies de sesión (Edge-safe)
+  await supabase.auth.getUser();
+
+  return response;
 }
