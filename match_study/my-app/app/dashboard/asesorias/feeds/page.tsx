@@ -111,7 +111,7 @@ async function safeInsertUserEvent(payload: {
   event_type: string;
   entity_type: "feed";
   entity_id: number;
-  meta?: Record<string, any>;
+  meta?: Record<string, unknown>;
 }) {
   try {
     await supabase.from("user_events").insert({
@@ -245,8 +245,6 @@ export default function FeedsPage() {
     Record<string, { text: string; images: string[] }>
   >({});
 
-  const [meEmail, setMeEmail] = useState<string | null>(null);
-
   const baseFiltered = useMemo(() => {
     const t = q.trim().toLowerCase();
     const now = new Date();
@@ -365,7 +363,6 @@ export default function FeedsPage() {
 
       const { data: u } = await supabase.auth.getUser();
       const email = u?.user?.email ?? null;
-      setMeEmail(email);
 
       // ✅ IMPORTANTE: tu /api/feeds-with-users debe incluir "tags" y "images"
       const res = await fetch("/api/feeds-with-users", { cache: "no-store" });
@@ -396,7 +393,7 @@ export default function FeedsPage() {
 
       if (likesErr) throw likesErr;
 
-      const likesRows: FeedLikeRow[] = (likesData as any) ?? [];
+      const likesRows = (likesData ?? []) as FeedLikeRow[];
       const likesCountMap = new Map<number, number>();
       const likedByMeSet = new Set<number>();
 
@@ -414,7 +411,7 @@ export default function FeedsPage() {
 
       if (commentsErr) throw commentsErr;
 
-      const commentRows: FeedCommentRow[] = (commentsData as any) ?? [];
+      const commentRows = (commentsData ?? []) as FeedCommentRow[];
       const commentsMap = new Map<number, Comment[]>();
 
       commentRows.forEach((row) => {
@@ -464,8 +461,8 @@ export default function FeedsPage() {
           credentials: "include",
         });
         if (res.ok) {
-          const j = await res.json();
-          if (j?.url) setSelfAvatarUrl(j.url as string);
+          const j = (await res.json()) as { url?: string };
+          if (j?.url) setSelfAvatarUrl(j.url);
         }
       } catch {
         // ignore
@@ -513,18 +510,18 @@ export default function FeedsPage() {
         user_email: u.user.email,
         event_type: "feed_create",
         entity_type: "feed",
-        entity_id: data.id,
-        meta: { tags: data.tags ?? [] },
+        entity_id: data.id as number,
+        meta: { tags: (data as { tags?: unknown }).tags ?? [] },
       });
 
       const newRow: FeedRow = {
-        id: data.id,
-        hora: data.hora,
-        usuario: data.usuario,
-        materia: data.materia,
-        descripcion: data.descripcion,
-        tags: Array.isArray(data.tags) ? data.tags : [],
-        images: data.images ?? [],
+        id: data.id as number,
+        hora: data.hora as string,
+        usuario: data.usuario as string,
+        materia: data.materia as string,
+        descripcion: data.descripcion as string,
+        tags: Array.isArray((data as { tags?: unknown }).tags) ? ((data as { tags?: string[] }).tags ?? []) : [],
+        images: ((data as { images?: string[] | null }).images ?? []) as string[],
         likes: 0,
         likedByMe: false,
         comments: [],
@@ -648,11 +645,11 @@ export default function FeedsPage() {
       });
 
       const newComment: Comment = {
-        id: String(data.id),
+        id: String((data as { id: number }).id),
         author: displayName,
-        text: data.texto,
-        createdAt: data.created_at,
-        images: data.images ?? [],
+        text: (data as { texto: string }).texto,
+        createdAt: (data as { created_at: string }).created_at,
+        images: ((data as { images?: string[] | null }).images ?? []) as string[],
       };
 
       setItems((prev) =>
@@ -858,7 +855,9 @@ export default function FeedsPage() {
                         }`}
                         title={f.likedByMe ? "Quitar like" : "Dar like"}
                       >
-                        <Heart className={`h-4 w-4 ${f.likedByMe ? "fill-pink-400 text-pink-400" : ""}`} />
+                        <Heart
+                          className={`h-4 w-4 ${f.likedByMe ? "fill-pink-400 text-pink-400" : ""}`}
+                        />
                         <span>{f.likes ?? 0}</span>
                       </button>
 
@@ -883,7 +882,9 @@ export default function FeedsPage() {
                               >
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="font-semibold">{c.author}</span>
-                                  <span className="text-[10px] text-slate-500">{timeAgo(c.createdAt)}</span>
+                                  <span className="text-[10px] text-slate-500">
+                                    {timeAgo(c.createdAt)}
+                                  </span>
                                 </div>
                                 <p className="mt-1 whitespace-pre-wrap">{c.text}</p>
 
@@ -1003,7 +1004,9 @@ export default function FeedsPage() {
               )}
               <div>
                 <p className="text-sm font-semibold text-white">Nueva publicación</p>
-                <p className="text-xs text-slate-400">Comparte dudas, tips o recursos con la comunidad ✨</p>
+                <p className="text-xs text-slate-400">
+                  Comparte dudas, tips o recursos con la comunidad ✨
+                </p>
               </div>
             </div>
 
@@ -1016,7 +1019,6 @@ export default function FeedsPage() {
                 className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
 
-              {/* ✅ TAG INPUT (chips) */}
               <TagInput
                 value={form.tags}
                 onChange={(tags) => setForm((f) => ({ ...f, tags }))}
