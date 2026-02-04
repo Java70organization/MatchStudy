@@ -1,7 +1,8 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   Rss,
   Search,
@@ -246,27 +247,27 @@ export default function FeedsPage() {
 
   const [meEmail, setMeEmail] = useState<string | null>(null);
 
-  const now = useMemo(() => new Date(), []);
-
-  const inRange = (iso: string, range: DateRange) => {
-    if (range === "all") return true;
-    const d = new Date(iso);
-    if (range === "today") return d.toDateString() === now.toDateString();
-    if (range === "7d") {
-      const past = new Date(now);
-      past.setDate(now.getDate() - 7);
-      return d >= past && d <= now;
-    }
-    if (range === "30d") {
-      const past = new Date(now);
-      past.setDate(now.getDate() - 30);
-      return d >= past && d <= now;
-    }
-    return true;
-  };
-
   const baseFiltered = useMemo(() => {
     const t = q.trim().toLowerCase();
+    const now = new Date();
+
+    const inRange = (iso: string, range: DateRange) => {
+      if (range === "all") return true;
+      const d = new Date(iso);
+      if (range === "today") return d.toDateString() === now.toDateString();
+      if (range === "7d") {
+        const past = new Date(now);
+        past.setDate(now.getDate() - 7);
+        return d >= past && d <= now;
+      }
+      if (range === "30d") {
+        const past = new Date(now);
+        past.setDate(now.getDate() - 30);
+        return d >= past && d <= now;
+      }
+      return true;
+    };
+
     return items.filter((it) => {
       const textMatch =
         !t ||
@@ -283,7 +284,7 @@ export default function FeedsPage() {
 
       return textMatch && rangeMatch && tagMatch;
     });
-  }, [items, q, dateRange, tagFilter, now]);
+  }, [items, q, dateRange, tagFilter]);
 
   const visibleItems = useMemo(() => {
     const arr = [...baseFiltered];
@@ -320,15 +321,33 @@ export default function FeedsPage() {
     });
   }, [items, q]);
 
-  const counts = useMemo(
-    () => ({
+  const counts = useMemo(() => {
+    const now = new Date();
+
+    const inRange = (iso: string, range: DateRange) => {
+      if (range === "all") return true;
+      const d = new Date(iso);
+      if (range === "today") return d.toDateString() === now.toDateString();
+      if (range === "7d") {
+        const past = new Date(now);
+        past.setDate(now.getDate() - 7);
+        return d >= past && d <= now;
+      }
+      if (range === "30d") {
+        const past = new Date(now);
+        past.setDate(now.getDate() - 30);
+        return d >= past && d <= now;
+      }
+      return true;
+    };
+
+    return {
       all: baseByText.length,
       today: baseByText.filter((it) => inRange(it.hora, "today")).length,
       d7: baseByText.filter((it) => inRange(it.hora, "7d")).length,
       d30: baseByText.filter((it) => inRange(it.hora, "30d")).length,
-    }),
-    [baseByText],
-  );
+    };
+  }, [baseByText]);
 
   // ✅ Tags disponibles para filtro (de los posts cargados)
   const tagsAvailable = useMemo(() => {
@@ -339,7 +358,7 @@ export default function FeedsPage() {
     return Array.from(set).sort();
   }, [items]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -424,11 +443,11 @@ export default function FeedsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   useEffect(() => {
     (async () => {
@@ -580,7 +599,10 @@ export default function FeedsPage() {
     }));
   };
 
-  const handleCommentImagesChange = async (key: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCommentImagesChange = async (
+    key: string,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const images = await filesToBase64(e.target.files);
     setCommentDrafts((prev) => ({
       ...prev,
@@ -760,9 +782,12 @@ export default function FeedsPage() {
               >
                 <div className="flex items-start gap-3">
                   {f.avatar_url ? (
-                    <img
+                    <Image
                       src={f.avatar_url}
                       alt="avatar"
+                      width={40}
+                      height={40}
+                      unoptimized
                       className="h-10 w-10 rounded-full border border-slate-600 object-cover"
                     />
                   ) : (
@@ -809,7 +834,14 @@ export default function FeedsPage() {
                             key={`${key}-img-${idx}`}
                             className="overflow-hidden rounded-xl border border-slate-700/70 bg-slate-800"
                           >
-                            <img src={img} alt={`Imagen ${idx + 1}`} className="h-40 w-full object-cover" />
+                            <Image
+                              src={img}
+                              alt={`Imagen ${idx + 1}`}
+                              width={800}
+                              height={800}
+                              unoptimized
+                              className="h-40 w-full object-cover"
+                            />
                           </div>
                         ))}
                       </div>
@@ -862,9 +894,12 @@ export default function FeedsPage() {
                                         key={`${c.id}-img-${idx}`}
                                         className="overflow-hidden rounded-lg border border-slate-700/70 bg-slate-800"
                                       >
-                                        <img
+                                        <Image
                                           src={img}
                                           alt={`Comentario imagen ${idx + 1}`}
+                                          width={600}
+                                          height={600}
+                                          unoptimized
                                           className="h-24 w-full object-cover"
                                         />
                                       </div>
@@ -916,7 +951,14 @@ export default function FeedsPage() {
                                   key={`${key}-preview-${idx}`}
                                   className="h-10 w-10 overflow-hidden rounded-lg border border-slate-700"
                                 >
-                                  <img src={img} alt="preview" className="h-full w-full object-cover" />
+                                  <Image
+                                    src={img}
+                                    alt="preview"
+                                    width={80}
+                                    height={80}
+                                    unoptimized
+                                    className="h-full w-full object-cover"
+                                  />
                                 </div>
                               ))}
                             </div>
@@ -946,9 +988,12 @@ export default function FeedsPage() {
 
             <div className="mb-4 flex items-center gap-2">
               {selfAvatarUrl ? (
-                <img
+                <Image
                   src={selfAvatarUrl}
                   alt="mi avatar"
+                  width={36}
+                  height={36}
+                  unoptimized
                   className="h-9 w-9 rounded-full border border-slate-600 object-cover"
                 />
               ) : (
@@ -1016,7 +1061,14 @@ export default function FeedsPage() {
                       key={`new-img-${idx}`}
                       className="h-24 overflow-hidden rounded-xl border border-slate-700 bg-slate-800"
                     >
-                      <img src={img} alt="preview" className="h-full w-full object-cover" />
+                      <Image
+                        src={img}
+                        alt="preview"
+                        width={600}
+                        height={600}
+                        unoptimized
+                        className="h-full w-full object-cover"
+                      />
                     </div>
                   ))}
                 </div>
