@@ -2,6 +2,9 @@
 
 import type React from "react";
 import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
+import { checkUserProfile } from "@/lib/supabase/user";
 import {
   Users,
   BookOpen,
@@ -11,10 +14,9 @@ import {
   Sparkles,
   Clock,
   RefreshCw,
+  GraduationCap,
+  ArrowRight,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
-import { checkUserProfile } from "@/lib/supabase/user";
 
 type FeedRow = {
   id: number;
@@ -34,6 +36,24 @@ type FeedRow = {
   affinity_score?: number | null;
 };
 
+type TutorRecommendationRow = {
+  tutor_email: string;
+  score: number;
+  model_version?: string | null;
+  created_at?: string | null;
+
+  nombres?: string | null;
+  apellidos?: string | null;
+  universidad?: string | null;
+  urlFoto?: string | null;
+
+  bio?: string | null;
+  modality?: string | null;
+  hourly_rate_min?: number | null;
+  hourly_rate_max?: number | null;
+  location?: string | null;
+};
+
 type FeedSectionKey = "para_ti" | "tendencias" | "recientes";
 
 function formatDate(ts: string) {
@@ -42,6 +62,19 @@ function formatDate(ts: string) {
   } catch {
     return ts;
   }
+}
+
+function formatName(r: TutorRecommendationRow) {
+  const full = `${r.nombres ?? ""} ${r.apellidos ?? ""}`.trim();
+  return full || r.tutor_email;
+}
+
+function formatRate(r: TutorRecommendationRow) {
+  const min = r.hourly_rate_min ?? null;
+  const max = r.hourly_rate_max ?? null;
+  if (min == null && max == null) return null;
+  if (min != null && max != null) return `$${min}–$${max}/h`;
+  return `$${min ?? max}/h`;
 }
 
 export default function LobbyPage() {
@@ -57,6 +90,11 @@ export default function LobbyPage() {
 
   const [showIntake, setShowIntake] = useState(false);
   const [intakeText, setIntakeText] = useState("");
+
+  // ✅ Nuevos estados para recomendaciones de tutores
+  const [tutorLoading, setTutorLoading] = useState(false);
+  const [tutorRecs, setTutorRecs] = useState<TutorRecommendationRow[]>([]);
+  const [hasAssessment, setHasAssessment] = useState<boolean>(false);
 
   const [uiError, setUiError] = useState<string | null>(null);
 
@@ -115,7 +153,6 @@ export default function LobbyPage() {
         .select("*")
         .limit(12);
 
-      // Log de errores (y a UI)
       if (errPT) setUiError(`Para ti: ${errPT.message}`);
       else if (errT) setUiError(`Tendencias: ${errT.message}`);
       else if (errR) setUiError(`Recientes: ${errR.message}`);
@@ -128,12 +165,117 @@ export default function LobbyPage() {
       setFeedsTendencias(td);
       setFeedsRecientes(rc);
 
-      // Si “Para ti” está vacío:
-      // - muestra intake
-      // - y deja fallback en UI (si el tab para_ti está vacío, enseñamos recientes en currentFeeds)
       setShowIntake(pt.length === 0);
     } finally {
       setFeedLoading(false);
+    }
+  };
+
+  /**
+   * ✅ Carga recomendaciones de tutores basadas en el último assessment del usuario.
+   *
+   * Requisitos esperados en DB:
+   * - public.assessments (student_email, created_at)
+   * - public.tutor_recommendations (assessment_id, tutor_email, score)
+   * - public.usuarios (email, nombres, apellidos, universidad, urlFoto)
+   * - public.tutor_profiles (user_email, bio, modality, hourly_rate_min/max, location)
+   *
+   * Si no existe assessment: mostramos CTA para ir al formulario.
+   */
+  const loadTutorRecommendations = async (email: string) => {
+    setTutorLoading(true);
+    setUiError(null);
+
+    try {
+      // 1) Traer el último assessment del usuario
+      const { data: lastAssessment, error: errA } = await supabase
+        .from("assessments")
+        .select("id, created_at")
+        .eq("student_email", email)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (errA) {
+        setUiError(`Assessments: ${errA.message}`);
+        setHasAssessment(false);
+        setTutorRecs([]);
+        return;
+      }
+
+      if (!lastAssessment?.id) {
+        setHasAssessment(false);
+        setTutorRecs([]);
+        return;
+      }
+
+      setHasAssessment(true);
+
+      // 2) Traer recomendaciones para ese assessment (top 8)
+      const { data: recs, error: errR } = await supabase
+        .from("tutor_recommendations")
+        .select("tutor_email, score, model_version, created_at")
+        .eq("assessment_id", lastAssessment.id)
+        .order("score", { ascending: false })
+        .limit(8);
+
+      if (errR) {
+        setUiError(`Recomendaciones: ${errR.message}`);
+        setTutorRecs([]);
+        return;
+      }
+
+      const base = (recs ?? []) as TutorRecommendationRow[];
+      if (base.length === 0) {
+        setTutorRecs([]);
+        return;
+      }
+
+      const emails = base.map((r) => r.tutor_email).filter(Boolean);
+      if (emails.length === 0) {
+        setTutorRecs(base);
+        return;
+      }
+
+      // 3) Enriquecer con datos de usuarios
+      const { data: users, error: errU } = await supabase
+        .from("usuarios")
+        .select("email, nombres, apellidos, universidad, urlFoto")
+        .in("email", emails);
+
+      if (errU) setUiError(`Usuarios: ${errU.message}`);
+
+      // 4) Enriquecer con perfil tutor
+      const { data: profiles, error: errP } = await supabase
+        .from("tutor_profiles")
+        .select("user_email, bio, modality, hourly_rate_min, hourly_rate_max, location")
+        .in("user_email", emails);
+
+      if (errP) setUiError((prev) => prev ?? `Tutor profile: ${errP.message}`);
+
+      const userMap = new Map<string, any>((users ?? []).map((u: any) => [u.email, u]));
+      const profileMap = new Map<string, any>((profiles ?? []).map((p: any) => [p.user_email, p]));
+
+      const merged: TutorRecommendationRow[] = base.map((r) => {
+        const u = userMap.get(r.tutor_email);
+        const p = profileMap.get(r.tutor_email);
+        return {
+          ...r,
+          nombres: u?.nombres ?? null,
+          apellidos: u?.apellidos ?? null,
+          universidad: u?.universidad ?? null,
+          urlFoto: u?.urlFoto ?? null,
+          bio: p?.bio ?? null,
+          modality: p?.modality ?? null,
+          hourly_rate_min: p?.hourly_rate_min ?? null,
+          hourly_rate_max: p?.hourly_rate_max ?? null,
+          location: p?.location ?? null,
+        };
+      });
+
+      setTutorRecs(merged);
+    } finally {
+      setTutorLoading(false);
     }
   };
 
@@ -160,7 +302,7 @@ export default function LobbyPage() {
             return;
           }
 
-          await loadFeedSections(email);
+          await Promise.all([loadFeedSections(email), loadTutorRecommendations(email)]);
         }
       } catch (error: unknown) {
         console.error("Error verificando perfil:", error);
@@ -173,7 +315,6 @@ export default function LobbyPage() {
     checkUserProfileOnLoad();
   }, []);
 
-  // ✅ Fallback: si está en "para_ti" y viene vacío -> mostramos recientes
   const currentFeeds: FeedRow[] = useMemo(() => {
     if (activeSection === "para_ti") {
       return feedsParaTi.length > 0 ? feedsParaTi : feedsRecientes;
@@ -208,6 +349,21 @@ export default function LobbyPage() {
       });
     }
     window.location.href = "/feeds";
+  };
+
+  const onGoToAssessment = async () => {
+    if (userEmail) {
+      await logEvent(userEmail, "assessment_cta_click", "feed", 0, {});
+    }
+    window.location.href = "/assessment";
+  };
+
+  const onOpenTutor = async (tutorEmail: string) => {
+    if (userEmail) {
+      await logEvent(userEmail, "tutor_rec_click", "feed", 0, { tutorEmail });
+    }
+    // Ajusta esta ruta a tu UI real (perfil tutor / chat / crear sala)
+    window.location.href = `/tutores?email=${encodeURIComponent(tutorEmail)}`;
   };
 
   if (loading) {
@@ -267,6 +423,146 @@ export default function LobbyPage() {
         </div>
       </div>
 
+      {/* ✅ Recomendaciones de tutores (arriba del feed, dentro del lobby) */}
+      <div className="bg-slate-900/50 rounded-2xl p-6 border border-slate-800">
+        <div className="flex items-start justify-between gap-4 flex-col md:flex-row">
+          <div className="space-y-1">
+            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-purple-400" />
+              Tutores recomendados
+            </h2>
+            <p className="text-sm text-slate-300">
+              Basado en tu formulario (assessment). Si aún no lo llenas, te mando a hacerlo.
+            </p>
+
+            {uiError && (
+              <div className="mt-2 rounded-xl border border-red-500/30 bg-red-900/10 px-3 py-2 text-xs text-red-300">
+                {uiError}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => userEmail && loadTutorRecommendations(userEmail)}
+              disabled={tutorLoading || !userEmail}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 hover:border-purple-500/50 disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${tutorLoading ? "animate-spin" : ""}`} />
+              Actualizar
+            </button>
+
+            <button
+              onClick={onGoToAssessment}
+              className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500"
+            >
+              Llenar formulario
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5">
+          {tutorLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center space-y-3">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-500 mx-auto" />
+                <p className="text-slate-300 text-sm">Buscando tutores...</p>
+              </div>
+            </div>
+          ) : !hasAssessment ? (
+            <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-r from-purple-900/20 to-pink-900/20 p-5">
+              <div className="flex items-center gap-2 text-white font-semibold">
+                <Target className="h-5 w-5 text-purple-400" />
+                Aún no tenemos tu necesidad
+              </div>
+              <p className="mt-1 text-sm text-slate-300">
+                Llena el formulario para recomendarte tutores de programación más adecuados (KNN).
+              </p>
+
+              <div className="mt-4">
+                <button
+                  onClick={onGoToAssessment}
+                  className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500"
+                >
+                  Ir al formulario
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ) : tutorRecs.length === 0 ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-6 text-slate-300 text-sm">
+              Ya tienes formulario, pero todavía no hay recomendaciones guardadas. (Esto pasa si aún no corriste el
+              algoritmo o no existe tutor_recommendations).
+              <div className="mt-3">
+                <button
+                  onClick={onGoToAssessment}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 hover:border-purple-500/50"
+                >
+                  Editar formulario
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {tutorRecs.map((t) => (
+                <button
+                  key={t.tutor_email}
+                  onClick={() => onOpenTutor(t.tutor_email)}
+                  className="text-left rounded-2xl border border-slate-800 bg-slate-950/20 p-4 hover:border-purple-500/40 transition-all"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="h-12 w-12 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0">
+                      {t.urlFoto ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={t.urlFoto} alt={formatName(t)} className="h-full w-full object-cover" />
+                      ) : (
+                        <GraduationCap className="h-6 w-6 text-purple-300" />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-white font-semibold line-clamp-1">{formatName(t)}</div>
+                          <div className="text-xs text-slate-400 line-clamp-1">{t.universidad ?? "Tutor"}</div>
+                        </div>
+
+                        <span className="text-xs rounded-lg border border-purple-500/30 bg-purple-900/10 px-2 py-1 text-purple-300">
+                          Match {Math.round((t.score ?? 0) * 100)}%
+                        </span>
+                      </div>
+
+                      {t.bio && <p className="mt-2 text-sm text-slate-300 line-clamp-2">{t.bio}</p>}
+
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
+                        {t.modality && (
+                          <span className="rounded-lg border border-slate-800 bg-slate-900/40 px-2 py-1">
+                            {t.modality}
+                          </span>
+                        )}
+                        {formatRate(t) && (
+                          <span className="rounded-lg border border-slate-800 bg-slate-900/40 px-2 py-1">
+                            {formatRate(t)}
+                          </span>
+                        )}
+                        {t.location && (
+                          <span className="rounded-lg border border-slate-800 bg-slate-900/40 px-2 py-1">
+                            {t.location}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ✅ Sección existente: feeds */}
       <div className="bg-slate-900/50 rounded-2xl p-6 border border-slate-800">
         <div className="flex items-start justify-between gap-4 flex-col md:flex-row">
           <div className="space-y-1">
