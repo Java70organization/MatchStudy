@@ -54,6 +54,23 @@ type TutorRecommendationRow = {
   location?: string | null;
 };
 
+type UserRow = {
+  email: string;
+  nombres: string | null;
+  apellidos: string | null;
+  universidad: string | null;
+  urlFoto: string | null;
+};
+
+type TutorProfileRow = {
+  user_email: string;
+  bio: string | null;
+  modality: string | null;
+  hourly_rate_min: number | null;
+  hourly_rate_max: number | null;
+  location: string | null;
+};
+
 type FeedSectionKey = "para_ti" | "tendencias" | "recientes";
 
 function formatDate(ts: string) {
@@ -91,7 +108,7 @@ export default function LobbyPage() {
   const [showIntake, setShowIntake] = useState(false);
   const [intakeText, setIntakeText] = useState("");
 
-  // ✅ Nuevos estados para recomendaciones de tutores
+  // ✅ Recomendaciones de tutores
   const [tutorLoading, setTutorLoading] = useState(false);
   const [tutorRecs, setTutorRecs] = useState<TutorRecommendationRow[]>([]);
   const [hasAssessment, setHasAssessment] = useState<boolean>(false);
@@ -133,25 +150,16 @@ export default function LobbyPage() {
 
     try {
       // 1) Para ti: RPC
-      const { data: paraTi, error: errPT } = await supabase.rpc(
-        "get_feeds_para_ti",
-        {
-          p_user_email: email,
-          p_limit: 12,
-        },
-      );
+      const { data: paraTi, error: errPT } = await supabase.rpc("get_feeds_para_ti", {
+        p_user_email: email,
+        p_limit: 12,
+      });
 
       // 2) Tendencias: view
-      const { data: tendencias, error: errT } = await supabase
-        .from("feeds_tendencias")
-        .select("*")
-        .limit(12);
+      const { data: tendencias, error: errT } = await supabase.from("feeds_tendencias").select("*").limit(12);
 
       // 3) Recientes: view
-      const { data: recientes, error: errR } = await supabase
-        .from("feeds_recientes")
-        .select("*")
-        .limit(12);
+      const { data: recientes, error: errR } = await supabase.from("feeds_recientes").select("*").limit(12);
 
       if (errPT) setUiError(`Para ti: ${errPT.message}`);
       else if (errT) setUiError(`Tendencias: ${errT.message}`);
@@ -173,28 +181,20 @@ export default function LobbyPage() {
 
   /**
    * ✅ Carga recomendaciones de tutores basadas en el último assessment del usuario.
-   *
-   * Requisitos esperados en DB:
-   * - public.assessments (student_email, created_at)
-   * - public.tutor_recommendations (assessment_id, tutor_email, score)
-   * - public.usuarios (email, nombres, apellidos, universidad, urlFoto)
-   * - public.tutor_profiles (user_email, bio, modality, hourly_rate_min/max, location)
-   *
-   * Si no existe assessment: mostramos CTA para ir al formulario.
    */
   const loadTutorRecommendations = async (email: string) => {
     setTutorLoading(true);
     setUiError(null);
 
     try {
-      // 1) Traer el último assessment del usuario
+      // 1) Último assessment
       const { data: lastAssessment, error: errA } = await supabase
         .from("assessments")
         .select("id, created_at")
         .eq("student_email", email)
         .order("created_at", { ascending: false })
         .limit(1)
-        .maybeSingle();
+        .maybeSingle<{ id: string; created_at: string }>();
 
       if (errA) {
         setUiError(`Assessments: ${errA.message}`);
@@ -211,7 +211,7 @@ export default function LobbyPage() {
 
       setHasAssessment(true);
 
-      // 2) Traer recomendaciones para ese assessment (top 8)
+      // 2) Recomendaciones
       const { data: recs, error: errR } = await supabase
         .from("tutor_recommendations")
         .select("tutor_email, score, model_version, created_at")
@@ -231,21 +231,21 @@ export default function LobbyPage() {
         return;
       }
 
-      const emails = base.map((r) => r.tutor_email).filter(Boolean);
+      const emails = base.map((r) => r.tutor_email).filter((x): x is string => typeof x === "string" && x.length > 0);
       if (emails.length === 0) {
         setTutorRecs(base);
         return;
       }
 
-      // 3) Enriquecer con datos de usuarios
+      // 3) Usuarios (tipado)
       const { data: users, error: errU } = await supabase
         .from("usuarios")
-        .select("email, nombres, apellidos, universidad, urlFoto")
+        .select('email, nombres, apellidos, universidad, "urlFoto"')
         .in("email", emails);
 
       if (errU) setUiError(`Usuarios: ${errU.message}`);
 
-      // 4) Enriquecer con perfil tutor
+      // 4) Perfiles tutor (tipado)
       const { data: profiles, error: errP } = await supabase
         .from("tutor_profiles")
         .select("user_email, bio, modality, hourly_rate_min, hourly_rate_max, location")
@@ -253,8 +253,11 @@ export default function LobbyPage() {
 
       if (errP) setUiError((prev) => prev ?? `Tutor profile: ${errP.message}`);
 
-      const userMap = new Map<string, any>((users ?? []).map((u: any) => [u.email, u]));
-      const profileMap = new Map<string, any>((profiles ?? []).map((p: any) => [p.user_email, p]));
+      const userRows = (users ?? []) as UserRow[];
+      const profileRows = (profiles ?? []) as TutorProfileRow[];
+
+      const userMap = new Map<string, UserRow>(userRows.map((u) => [u.email, u]));
+      const profileMap = new Map<string, TutorProfileRow>(profileRows.map((p) => [p.user_email, p]));
 
       const merged: TutorRecommendationRow[] = base.map((r) => {
         const u = userMap.get(r.tutor_email);
@@ -312,7 +315,7 @@ export default function LobbyPage() {
       }
     };
 
-    checkUserProfileOnLoad();
+    void checkUserProfileOnLoad();
   }, []);
 
   const currentFeeds: FeedRow[] = useMemo(() => {
@@ -344,9 +347,7 @@ export default function LobbyPage() {
 
   const onOpenFeed = async (feed: FeedRow) => {
     if (userEmail) {
-      await logEvent(userEmail, "feed_view", "feed", feed.id, {
-        section: activeSection,
-      });
+      await logEvent(userEmail, "feed_view", "feed", feed.id, { section: activeSection });
     }
     window.location.href = "/feeds";
   };
@@ -362,7 +363,6 @@ export default function LobbyPage() {
     if (userEmail) {
       await logEvent(userEmail, "tutor_rec_click", "feed", 0, { tutorEmail });
     }
-    // Ajusta esta ruta a tu UI real (perfil tutor / chat / crear sala)
     window.location.href = `/tutores?email=${encodeURIComponent(tutorEmail)}`;
   };
 
@@ -423,7 +423,7 @@ export default function LobbyPage() {
         </div>
       </div>
 
-      {/* ✅ Recomendaciones de tutores (arriba del feed, dentro del lobby) */}
+      {/* ✅ Recomendaciones de tutores */}
       <div className="bg-slate-900/50 rounded-2xl p-6 border border-slate-800">
         <div className="flex items-start justify-between gap-4 flex-col md:flex-row">
           <div className="space-y-1">
@@ -679,9 +679,7 @@ export default function LobbyPage() {
                     )}
                   </div>
 
-                  {f.descripcion && (
-                    <p className="mt-2 text-sm text-slate-300 line-clamp-3">{f.descripcion}</p>
-                  )}
+                  {f.descripcion && <p className="mt-2 text-sm text-slate-300 line-clamp-3">{f.descripcion}</p>}
 
                   <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
                     <span className="line-clamp-1">

@@ -24,6 +24,32 @@ export type ChatMessage = {
   read_at: string | null;
 };
 
+export type MessageNotification = {
+  id: number;
+  conversation_id: string | null;
+  message_id: string | null;
+  title: string;
+  body: string | null;
+  created_at: string;
+};
+
+type ParticipantRow = {
+  user_email: string;
+};
+
+type UsuariosRow = {
+  email: string;
+  nombres: string | null;
+  apellidos: string | null;
+  // Nota: en tu DB es camelCase
+  urlFoto: string | null;
+};
+
+type LastMsgRow = {
+  content: string | null;
+  created_at: string | null;
+};
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 
 function normalizePhoto(urlFoto: string | null): string | null {
@@ -32,19 +58,33 @@ function normalizePhoto(urlFoto: string | null): string | null {
   return `${supabaseUrl}/storage/v1/object/public/Profile/${urlFoto}`;
 }
 
+/**
+ * Type guard genérico para "object con keys string"
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
 function errMsg(e: unknown): string {
   if (!e) return "Error desconocido";
   if (e instanceof Error) return e.message;
   if (typeof e === "string") return e;
 
-  if (typeof e === "object") {
-    const anyE = e as any;
+  if (isRecord(e)) {
     const parts: string[] = [];
-    if (anyE.message) parts.push(String(anyE.message));
-    if (anyE.details) parts.push(String(anyE.details));
-    if (anyE.hint) parts.push(String(anyE.hint));
-    if (anyE.code) parts.push(`code: ${String(anyE.code)}`);
+
+    const msg = e["message"];
+    const details = e["details"];
+    const hint = e["hint"];
+    const code = e["code"];
+
+    if (msg !== undefined) parts.push(String(msg));
+    if (details !== undefined) parts.push(String(details));
+    if (hint !== undefined) parts.push(String(hint));
+    if (code !== undefined) parts.push(`code: ${String(code)}`);
+
     if (parts.length) return parts.join(" | ");
+
     try {
       return JSON.stringify(e);
     } catch {
@@ -58,16 +98,16 @@ function errMsg(e: unknown): string {
 export async function fetchProfileByEmail(email: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from("usuarios")
-    .select("email,nombres,apellidos,urlFoto")
+    .select('email,nombres,apellidos,"urlFoto"')
     .eq("email", email)
-    .maybeSingle();
+    .maybeSingle<UsuariosRow>();
 
   if (error || !data) return null;
 
   return {
     email: data.email,
-    nombres: data.nombres,
-    apellidos: data.apellidos,
+    nombres: data.nombres ?? "",
+    apellidos: data.apellidos ?? "",
     urlFoto: normalizePhoto(data.urlFoto),
   };
 }
@@ -75,10 +115,7 @@ export async function fetchProfileByEmail(email: string): Promise<Profile | null
 /**
  * Crea conversación 1-1 via RPC (server-side).
  */
-export async function getOrCreateConversation(
-  currentEmail: string,
-  otherEmail: string
-): Promise<string> {
+export async function getOrCreateConversation(currentEmail: string, otherEmail: string): Promise<string> {
   // Primero intenta encontrar una conversación existente
   const { data: existing, error: exErr } = await supabase
     .from("conversation_participants")
@@ -87,8 +124,11 @@ export async function getOrCreateConversation(
 
   if (!exErr && existing && existing.length > 0) {
     const grouped = existing.reduce<Record<string, Set<string>>>((acc, row) => {
-      if (!acc[row.conversation_id]) acc[row.conversation_id] = new Set();
-      acc[row.conversation_id].add(row.user_email);
+      const convId = String((row as { conversation_id: unknown }).conversation_id);
+      const userEmail = String((row as { user_email: unknown }).user_email);
+
+      if (!acc[convId]) acc[convId] = new Set();
+      acc[convId].add(userEmail);
       return acc;
     }, {});
 
@@ -108,12 +148,18 @@ export async function getOrCreateConversation(
     throw new Error(`No se pudo crear la conversación: ${errMsg(error)}`);
   }
 
-  return data as string;
+  return String(data);
 }
 
-export async function fetchConversationsForUser(
-  currentEmail: string
-): Promise<ConversationSummary[]> {
+function toParticipants(parts: unknown): ParticipantRow[] {
+  if (!Array.isArray(parts)) return [];
+  return parts
+    .filter((p): p is Record<string, unknown> => isRecord(p))
+    .map((p) => ({ user_email: String(p["user_email"] ?? "") }))
+    .filter((p) => p.user_email.length > 0);
+}
+
+export async function fetchConversationsForUser(currentEmail: string): Promise<ConversationSummary[]> {
   const { data: participantRows, error } = await supabase
     .from("conversation_participants")
     .select("conversation_id")
@@ -121,7 +167,10 @@ export async function fetchConversationsForUser(
 
   if (error || !participantRows) return [];
 
-  const conversationIds = participantRows.map((r) => r.conversation_id as string);
+  const conversationIds = participantRows
+    .map((r) => String((r as { conversation_id: unknown }).conversation_id))
+    .filter((id) => id.length > 0);
+
   if (conversationIds.length === 0) return [];
 
   const results: ConversationSummary[] = [];
@@ -133,15 +182,21 @@ export async function fetchConversationsForUser(
         p_conversation_id: conversationId,
       });
 
-      if (partsErr || !parts || parts.length === 0) return;
+      if (partsErr) return;
+
+      const list = toParticipants(parts);
+      if (list.length === 0) return;
 
       const otherEmail =
-        (parts as any[]).find((p) => p.user_email !== currentEmail)?.user_email ??
-        (parts as any[])[0].user_email;
+        list.find((p) => p.user_email !== currentEmail)?.user_email ?? list[0].user_email;
 
       const profile = await fetchProfileByEmail(otherEmail);
-      const otherProfile: Profile =
-        profile ?? { email: otherEmail, nombres: "", apellidos: "", urlFoto: null };
+      const otherProfile: Profile = profile ?? {
+        email: otherEmail,
+        nombres: "",
+        apellidos: "",
+        urlFoto: null,
+      };
 
       const { data: lastMsg } = await supabase
         .from("messages")
@@ -149,7 +204,7 @@ export async function fetchConversationsForUser(
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
         .limit(1)
-        .maybeSingle();
+        .maybeSingle<LastMsgRow>();
 
       const { count: unreadCount } = await supabase
         .from("messages")
@@ -165,7 +220,7 @@ export async function fetchConversationsForUser(
         lastMessageAt: lastMsg?.created_at ?? null,
         unreadCount: unreadCount ?? 0,
       });
-    })
+    }),
   );
 
   return results.sort((a, b) => {
@@ -193,7 +248,7 @@ export async function fetchMessages(conversationId: string): Promise<ChatMessage
 export async function sendMessage(
   conversationId: string,
   senderEmail: string,
-  content: string
+  content: string,
 ): Promise<ChatMessage | null> {
   const { data, error } = await supabase
     .from("messages")
@@ -223,18 +278,7 @@ export async function markConversationRead(conversationId: string, currentEmail:
     .is("read_at", null);
 }
 
-export type MessageNotification = {
-  id: number;
-  conversation_id: string | null;
-  message_id: string | null;
-  title: string;
-  body: string | null;
-  created_at: string;
-};
-
-export async function fetchUnreadNotifications(
-  currentEmail: string
-): Promise<MessageNotification[]> {
+export async function fetchUnreadNotifications(currentEmail: string): Promise<MessageNotification[]> {
   const { data, error } = await supabase
     .from("notifications")
     .select("id,conversation_id,message_id,title,body,created_at")

@@ -34,6 +34,11 @@ type UIUser = {
   urlFoto: string | null;
 };
 
+type UsersApiResponse = {
+  data?: UIUser[];
+  error?: string;
+};
+
 function NewChatModal({
   open,
   onClose,
@@ -58,17 +63,15 @@ function NewChatModal({
           cache: "no-store",
           credentials: "include",
         });
-        const json = await res.json();
+
+        const json = (await res.json().catch(() => ({}))) as UsersApiResponse;
         if (!res.ok) throw new Error(json?.error || "Error cargando usuarios");
 
         const base = (json.data || []) as UIUser[];
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 
         const normalized = base
-          .filter(
-            (u) =>
-              u.email && u.email.toLowerCase() !== currentEmail.toLowerCase()
-          )
+          .filter((u) => u.email && u.email.toLowerCase() !== currentEmail.toLowerCase())
           .map((u) => {
             let foto = u.urlFoto;
             if (foto && !/^https?:\/\//i.test(foto)) {
@@ -96,7 +99,7 @@ function NewChatModal({
     return users.filter(
       (u) =>
         `${u.nombres} ${u.apellidos}`.toLowerCase().includes(t) ||
-        u.email.toLowerCase().includes(t)
+        u.email.toLowerCase().includes(t),
     );
   }, [users, qs]);
 
@@ -107,10 +110,7 @@ function NewChatModal({
     setErrorMsg(null);
 
     try {
-      const conversationId = await getOrCreateConversation(
-        currentEmail,
-        selected.email
-      );
+      const conversationId = await getOrCreateConversation(currentEmail, selected.email);
       onConversationCreated(conversationId);
       onClose();
     } catch (e) {
@@ -158,15 +158,11 @@ function NewChatModal({
 
         <div className="max-h-72 space-y-1 overflow-y-auto">
           {loadingUsers && (
-            <p className="py-2 text-center text-xs text-slate-400">
-              Cargando usuarios...
-            </p>
+            <p className="py-2 text-center text-xs text-slate-400">Cargando usuarios...</p>
           )}
 
           {!loadingUsers && filtered.length === 0 && (
-            <p className="py-2 text-center text-xs text-slate-400">
-              No se encontraron usuarios.
-            </p>
+            <p className="py-2 text-center text-xs text-slate-400">No se encontraron usuarios.</p>
           )}
 
           {!loadingUsers &&
@@ -249,10 +245,7 @@ function ChatList({
     if (!t) return conversations;
     return conversations.filter((c) => {
       const fullName = `${c.otherUser.nombres} ${c.otherUser.apellidos}`.trim();
-      return (
-        fullName.toLowerCase().includes(t) ||
-        c.otherUser.email.toLowerCase().includes(t)
-      );
+      return fullName.toLowerCase().includes(t) || c.otherUser.email.toLowerCase().includes(t);
     });
   }, [conversations, search]);
 
@@ -284,10 +277,7 @@ function ChatList({
           filtered.map((c) => {
             const fullName = `${c.otherUser.nombres} ${c.otherUser.apellidos}`.trim();
             const lastTime = c.lastMessageAt
-              ? new Date(c.lastMessageAt).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
+              ? new Date(c.lastMessageAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
               : "";
 
             return (
@@ -295,9 +285,7 @@ function ChatList({
                 key={c.id}
                 onClick={() => onSelect(c.id)}
                 className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left ${
-                  c.id === selectedId
-                    ? "bg-slate-800 border border-slate-700"
-                    : "hover:bg-slate-900"
+                  c.id === selectedId ? "bg-slate-800 border border-slate-700" : "hover:bg-slate-900"
                 }`}
               >
                 {c.otherUser.urlFoto ? (
@@ -315,16 +303,12 @@ function ChatList({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
-                    <span className="truncate text-sm font-semibold text-white">
-                      {fullName || c.otherUser.email}
-                    </span>
+                    <span className="truncate text-sm font-semibold text-white">{fullName || c.otherUser.email}</span>
                     <span className="ml-2 shrink-0 text-[10px] text-slate-400">{lastTime}</span>
                   </div>
 
                   <div className="mt-0.5 flex items-center justify-between gap-2">
-                    <span className="line-clamp-1 text-[11px] text-slate-400">
-                      {c.lastMessagePreview}
-                    </span>
+                    <span className="line-clamp-1 text-[11px] text-slate-400">{c.lastMessagePreview}</span>
                     {c.unreadCount > 0 && (
                       <span className="ml-1 inline-flex min-w-[18px] justify-center rounded-full bg-purple-600 px-1 text-[10px] font-semibold text-white">
                         {c.unreadCount > 9 ? "9+" : c.unreadCount}
@@ -349,6 +333,10 @@ type ChatViewProps = {
   conversationId: string | null;
   currentEmail: string;
   otherUser: Profile | null;
+};
+
+type MessageInsertPayload = {
+  new: ChatMessage;
 };
 
 function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
@@ -385,9 +373,9 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          const newMsg = payload.new as ChatMessage;
+          const typed = payload as unknown as MessageInsertPayload;
+          const newMsg = typed.new;
 
-          // ✅ dedupe por id
           setMessages((prev) => {
             if (prev.some((x) => x.id === newMsg.id)) return prev;
             return [...prev, newMsg];
@@ -396,7 +384,7 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
           if (newMsg.sender_email !== currentEmail) {
             void markConversationRead(conversationId, currentEmail);
           }
-        }
+        },
       )
       .subscribe();
 
@@ -414,7 +402,7 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
 
     try {
       const m = await sendMessage(conversationId, currentEmail, content);
-      if (!m) setInput(content); // si falló, lo regresamos
+      if (!m) setInput(content);
     } finally {
       setSending(false);
     }
@@ -430,9 +418,7 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
   if (!conversationId || !otherUser) {
     return (
       <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/40">
-        <p className="text-sm text-slate-400">
-          Selecciona un chat o crea uno nuevo para comenzar.
-        </p>
+        <p className="text-sm text-slate-400">Selecciona un chat o crea uno nuevo para comenzar.</p>
       </div>
     );
   }
@@ -461,37 +447,26 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
       </div>
 
       <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3 text-sm">
-        {loading && (
-          <p className="py-2 text-center text-xs text-slate-400">Cargando mensajes...</p>
-        )}
+        {loading && <p className="py-2 text-center text-xs text-slate-400">Cargando mensajes...</p>}
         {!loading && messages.length === 0 && (
-          <p className="py-2 text-center text-xs text-slate-400">
-            Aún no hay mensajes. ¡Escribe el primero! ✨
-          </p>
+          <p className="py-2 text-center text-xs text-slate-400">Aún no hay mensajes. ¡Escribe el primero! ✨</p>
         )}
 
         {messages.map((m) => {
           const isMine = m.sender_email === currentEmail;
-          const time = new Date(m.created_at).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
+          const time = new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
           return (
             <div key={m.id} className={`flex w-full ${isMine ? "justify-end" : "justify-start"}`}>
               <div
                 className={`max-w-xs rounded-2xl px-3 py-2 text-[13px] shadow ${
-                  isMine
-                    ? "bg-purple-600 text-white rounded-br-sm"
-                    : "bg-slate-800 text-slate-50 rounded-bl-sm"
+                  isMine ? "bg-purple-600 text-white rounded-br-sm" : "bg-slate-800 text-slate-50 rounded-bl-sm"
                 }`}
               >
                 <p className="whitespace-pre-wrap break-words">{m.content}</p>
                 <div className="mt-1 flex items-center justify-end gap-1">
                   <span className="text-[10px] opacity-70">{time}</span>
-                  {isMine && (
-                    <span className="text-[10px] opacity-70">{m.read_at ? "Leído" : "Enviado"}</span>
-                  )}
+                  {isMine && <span className="text-[10px] opacity-70">{m.read_at ? "Leído" : "Enviado"}</span>}
                 </div>
               </div>
             </div>
@@ -526,6 +501,12 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
 /* -------------------------------------------------------------------------- */
 /*                        PÁGINA INTERNA (CON SEARCHPARAMS)                   */
 /* -------------------------------------------------------------------------- */
+
+type ParticipantRow = {
+  user_email: string;
+};
+
+type GetParticipantsResponse = ParticipantRow[] | null;
 
 function MensajesPageInner() {
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
@@ -571,14 +552,10 @@ function MensajesPageInner() {
 
     const channel = supabase
       .channel(`conv-list:${currentEmail}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        async () => {
-          const data = await fetchConversationsForUser(currentEmail);
-          setConversations(data);
-        }
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async () => {
+        const data = await fetchConversationsForUser(currentEmail);
+        setConversations(data);
+      })
       .subscribe();
 
     return () => {
@@ -586,34 +563,40 @@ function MensajesPageInner() {
     };
   }, [currentEmail]);
 
-const handleSelectConversation = async (id: string) => {
-  setSelectedId(id);
+  const handleSelectConversation = async (id: string) => {
+    setSelectedId(id);
 
-  const conv = conversations.find((c) => c.id === id);
+    const conv = conversations.find((c) => c.id === id);
 
-  if (conv) {
-    setSelectedOtherUser(conv.otherUser);
-  } else if (currentEmail) {
-    const { data: parts, error } = await supabase.rpc("get_participants", {
-      p_conversation_id: id,
-    });
+    if (conv) {
+      setSelectedOtherUser(conv.otherUser);
+    } else if (currentEmail) {
+      const { data: parts, error } = await supabase.rpc("get_participants", {
+        p_conversation_id: id,
+      });
 
-    if (!error && parts && (parts as any[]).length > 0) {
-      const otherEmail =
-        (parts as any[]).find((p) => p.user_email !== currentEmail)?.user_email ??
-        (parts as any[])[0].user_email;
+      if (!error) {
+        const list = parts as GetParticipantsResponse;
+        const safeList: ParticipantRow[] = Array.isArray(list)
+          ? list.filter((p): p is ParticipantRow => !!p && typeof p.user_email === "string")
+          : [];
 
-      const profile = await fetchProfileByEmail(otherEmail);
-      if (profile) setSelectedOtherUser(profile);
+        if (safeList.length > 0) {
+          const otherEmail =
+            safeList.find((p) => p.user_email !== currentEmail)?.user_email ?? safeList[0].user_email;
+
+          const profile = await fetchProfileByEmail(otherEmail);
+          if (profile) setSelectedOtherUser(profile);
+        }
+      }
     }
-  }
 
-  if (currentEmail) {
-    await markConversationRead(id, currentEmail);
-    const updated = await fetchConversationsForUser(currentEmail);
-    setConversations(updated);
-  }
-};
+    if (currentEmail) {
+      await markConversationRead(id, currentEmail);
+      const updated = await fetchConversationsForUser(currentEmail);
+      setConversations(updated);
+    }
+  };
 
   const handleConversationCreated = async (conversationId: string) => {
     if (!currentEmail) return;
@@ -633,9 +616,7 @@ const handleSelectConversation = async (id: string) => {
 
       <div className="grid flex-1 grid-cols-1 gap-4 md:grid-cols-12">
         <div className="md:col-span-4">
-          {loadingConvs && (
-            <div className="mb-2 text-xs text-slate-400">Cargando conversaciones...</div>
-          )}
+          {loadingConvs && <div className="mb-2 text-xs text-slate-400">Cargando conversaciones...</div>}
           <ChatList
             conversations={conversations}
             selectedId={selectedId}
@@ -648,11 +629,7 @@ const handleSelectConversation = async (id: string) => {
 
         <div className="md:col-span-8">
           {currentEmail ? (
-            <ChatView
-              conversationId={selectedId}
-              currentEmail={currentEmail}
-              otherUser={selectedOtherUser}
-            />
+            <ChatView conversationId={selectedId} currentEmail={currentEmail} otherUser={selectedOtherUser} />
           ) : (
             <div className="flex h-full items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/40">
               <p className="text-sm text-slate-400">Cargando usuario...</p>
@@ -686,4 +663,3 @@ export default function MensajesPage() {
     </Suspense>
   );
 }
-
