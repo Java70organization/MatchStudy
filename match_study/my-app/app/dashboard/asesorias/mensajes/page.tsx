@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { MessageSquare, Search, Plus, Send } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -41,16 +41,18 @@ function NewChatModal({
   onConversationCreated,
 }: NewChatModalProps) {
   const [users, setUsers] = useState<UIUser[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [qs, setQs] = useState("");
   const [selected, setSelected] = useState<UIUser | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Cargar TODOS los usuarios desde /api/users
   useEffect(() => {
     if (!open) return;
 
     const load = async () => {
-      setLoading(true);
+      setLoadingUsers(true);
+      setErrorMsg(null);
       try {
         const res = await fetch("/api/users", {
           cache: "no-store",
@@ -65,8 +67,7 @@ function NewChatModal({
         const normalized = base
           .filter(
             (u) =>
-              u.email &&
-              u.email.toLowerCase() !== currentEmail.toLowerCase()
+              u.email && u.email.toLowerCase() !== currentEmail.toLowerCase()
           )
           .map((u) => {
             let foto = u.urlFoto;
@@ -80,12 +81,13 @@ function NewChatModal({
       } catch (e) {
         console.error(e);
         setUsers([]);
+        setErrorMsg(e instanceof Error ? e.message : "No se pudieron cargar usuarios");
       } finally {
-        setLoading(false);
+        setLoadingUsers(false);
       }
     };
 
-    load();
+    void load();
   }, [open, currentEmail]);
 
   const filtered = useMemo(() => {
@@ -100,32 +102,48 @@ function NewChatModal({
 
   const onConfirm = async () => {
     if (!selected) return;
-    const conversationId = await getOrCreateConversation(
-      currentEmail,
-      selected.email
-    );
-    onConversationCreated(conversationId);
-    onClose();
+
+    setCreating(true);
+    setErrorMsg(null);
+
+    try {
+      const conversationId = await getOrCreateConversation(
+        currentEmail,
+        selected.email
+      );
+      onConversationCreated(conversationId);
+      onClose();
+    } catch (e) {
+      console.error("Error iniciando chat:", e);
+      setErrorMsg(e instanceof Error ? e.message : "No se pudo iniciar el chat");
+    } finally {
+      setCreating(false);
+    }
   };
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-      <div className="absolute inset-0" onClick={onClose} />
+      <div className="absolute inset-0" onClick={creating ? undefined : onClose} />
       <div className="relative z-50 w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/95 p-4 shadow-2xl shadow-black/60">
-        {/* Header */}
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-white">Nuevo chat</h2>
           <button
             onClick={onClose}
-            className="rounded-full px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
+            disabled={creating}
+            className="rounded-full px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 disabled:opacity-50"
           >
             ✕
           </button>
         </div>
 
-        {/* Buscador */}
+        {errorMsg && (
+          <div className="mb-3 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-xs text-red-200">
+            {errorMsg}
+          </div>
+        )}
+
         <div className="mb-3">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -138,27 +156,26 @@ function NewChatModal({
           </div>
         </div>
 
-        {/* Lista de usuarios */}
         <div className="max-h-72 space-y-1 overflow-y-auto">
-          {loading && (
+          {loadingUsers && (
             <p className="py-2 text-center text-xs text-slate-400">
               Cargando usuarios...
             </p>
           )}
-          {!loading && filtered.length === 0 && (
+
+          {!loadingUsers && filtered.length === 0 && (
             <p className="py-2 text-center text-xs text-slate-400">
               No se encontraron usuarios.
             </p>
           )}
-          {!loading &&
+
+          {!loadingUsers &&
             filtered.map((u) => (
               <button
                 key={u.email}
                 onClick={() => setSelected(u)}
                 className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm ${
-                  selected?.email === u.email
-                    ? "bg-slate-800"
-                    : "hover:bg-slate-900"
+                  selected?.email === u.email ? "bg-slate-800" : "hover:bg-slate-900"
                 }`}
               >
                 {u.urlFoto ? (
@@ -173,33 +190,32 @@ function NewChatModal({
                     {(u.nombres || u.email).charAt(0).toUpperCase()}
                   </div>
                 )}
+
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm text-white">
                     {`${u.nombres} ${u.apellidos}`.trim() || u.email}
                   </div>
-                  <div className="truncate text-[11px] text-slate-400">
-                    {u.email}
-                  </div>
+                  <div className="truncate text-[11px] text-slate-400">{u.email}</div>
                 </div>
               </button>
             ))}
         </div>
 
-        {/* Botones */}
         <div className="mt-4 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+            disabled={creating}
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirm}
-            disabled={!selected}
+            disabled={!selected || creating}
             className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
           >
             <Plus className="h-3 w-3" />
-            Iniciar chat
+            {creating ? "Creando..." : "Iniciar chat"}
           </button>
         </div>
       </div>
@@ -263,9 +279,7 @@ function ChatList({
 
       <div className="flex-1 space-y-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <p className="py-2 text-center text-xs text-slate-400">
-            Sin conversaciones.
-          </p>
+          <p className="py-2 text-center text-xs text-slate-400">Sin conversaciones.</p>
         ) : (
           filtered.map((c) => {
             const fullName = `${c.otherUser.nombres} ${c.otherUser.apellidos}`.trim();
@@ -275,6 +289,7 @@ function ChatList({
                   minute: "2-digit",
                 })
               : "";
+
             return (
               <button
                 key={c.id}
@@ -294,20 +309,18 @@ function ChatList({
                   />
                 ) : (
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-600 text-xs font-semibold text-white">
-                    {(c.otherUser.nombres || c.otherUser.email)
-                      .charAt(0)
-                      .toUpperCase()}
+                    {(c.otherUser.nombres || c.otherUser.email).charAt(0).toUpperCase()}
                   </div>
                 )}
+
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
                     <span className="truncate text-sm font-semibold text-white">
                       {fullName || c.otherUser.email}
                     </span>
-                    <span className="ml-2 shrink-0 text-[10px] text-slate-400">
-                      {lastTime}
-                    </span>
+                    <span className="ml-2 shrink-0 text-[10px] text-slate-400">{lastTime}</span>
                   </div>
+
                   <div className="mt-0.5 flex items-center justify-between gap-2">
                     <span className="line-clamp-1 text-[11px] text-slate-400">
                       {c.lastMessagePreview}
@@ -344,7 +357,6 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
 
-  // Cargar mensajes cuando cambie la conversación
   useEffect(() => {
     if (!conversationId) return;
 
@@ -359,7 +371,6 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
     void load();
   }, [conversationId, currentEmail]);
 
-  // Realtime: escuchar nuevos mensajes de esta conversación
   useEffect(() => {
     if (!conversationId) return;
 
@@ -375,7 +386,12 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
         },
         (payload) => {
           const newMsg = payload.new as ChatMessage;
-          setMessages((prev) => [...prev, newMsg]);
+
+          // ✅ dedupe por id
+          setMessages((prev) => {
+            if (prev.some((x) => x.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
 
           if (newMsg.sender_email !== currentEmail) {
             void markConversationRead(conversationId, currentEmail);
@@ -391,14 +407,17 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
 
   const send = async () => {
     if (!conversationId || !input.trim()) return;
-    setSending(true);
 
-    const m = await sendMessage(conversationId, currentEmail, input.trim());
-    if (m) {
-      setMessages((prev) => [...prev, m]);
-      setInput("");
+    setSending(true);
+    const content = input.trim();
+    setInput("");
+
+    try {
+      const m = await sendMessage(conversationId, currentEmail, content);
+      if (!m) setInput(content); // si falló, lo regresamos
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -422,7 +441,6 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
 
   return (
     <div className="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900/60">
-      {/* Header del chat */}
       <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-3">
         {otherUser.urlFoto ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -437,38 +455,30 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
           </div>
         )}
         <div>
-          <div className="text-sm font-semibold text-white">
-            {fullName || otherUser.email}
-          </div>
+          <div className="text-sm font-semibold text-white">{fullName || otherUser.email}</div>
           <div className="text-[11px] text-slate-400">{otherUser.email}</div>
         </div>
       </div>
 
-      {/* Mensajes */}
       <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3 text-sm">
         {loading && (
-          <p className="py-2 text-center text-xs text-slate-400">
-            Cargando mensajes...
-          </p>
+          <p className="py-2 text-center text-xs text-slate-400">Cargando mensajes...</p>
         )}
         {!loading && messages.length === 0 && (
           <p className="py-2 text-center text-xs text-slate-400">
             Aún no hay mensajes. ¡Escribe el primero! ✨
           </p>
         )}
+
         {messages.map((m) => {
           const isMine = m.sender_email === currentEmail;
           const time = new Date(m.created_at).toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
           });
+
           return (
-            <div
-              key={m.id}
-              className={`flex w-full ${
-                isMine ? "justify-end" : "justify-start"
-              }`}
-            >
+            <div key={m.id} className={`flex w-full ${isMine ? "justify-end" : "justify-start"}`}>
               <div
                 className={`max-w-xs rounded-2xl px-3 py-2 text-[13px] shadow ${
                   isMine
@@ -476,15 +486,11 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
                     : "bg-slate-800 text-slate-50 rounded-bl-sm"
                 }`}
               >
-                <p className="whitespace-pre-wrap break-words">
-                  {m.content}
-                </p>
+                <p className="whitespace-pre-wrap break-words">{m.content}</p>
                 <div className="mt-1 flex items-center justify-end gap-1">
                   <span className="text-[10px] opacity-70">{time}</span>
                   {isMine && (
-                    <span className="text-[10px] opacity-70">
-                      {m.read_at ? "Leído" : "Enviado"}
-                    </span>
+                    <span className="text-[10px] opacity-70">{m.read_at ? "Leído" : "Enviado"}</span>
                   )}
                 </div>
               </div>
@@ -493,7 +499,6 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
         })}
       </div>
 
-      {/* Input */}
       <div className="border-t border-slate-800 px-3 py-2">
         <div className="flex items-end gap-2">
           <textarea
@@ -527,22 +532,18 @@ function MensajesPageInner() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedOtherUser, setSelectedOtherUser] = useState<Profile | null>(
-    null
-  );
+  const [selectedOtherUser, setSelectedOtherUser] = useState<Profile | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [loadingConvs, setLoadingConvs] = useState(false);
 
   const params = useSearchParams();
 
-  // Obtener usuario actual
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setCurrentEmail(data.user?.email ?? null);
     });
   }, []);
 
-  // Cargar conversaciones cuando tenemos el email
   useEffect(() => {
     if (!currentEmail) return;
 
@@ -565,7 +566,6 @@ function MensajesPageInner() {
     void load();
   }, [currentEmail, params]);
 
-  // Realtime: refrescar lista de conversaciones cuando haya nuevos mensajes
   useEffect(() => {
     if (!currentEmail) return;
 
@@ -573,11 +573,7 @@ function MensajesPageInner() {
       .channel(`conv-list:${currentEmail}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-        },
+        { event: "INSERT", schema: "public", table: "messages" },
         async () => {
           const data = await fetchConversationsForUser(currentEmail);
           setConversations(data);
@@ -590,33 +586,34 @@ function MensajesPageInner() {
     };
   }, [currentEmail]);
 
-  const handleSelectConversation = async (id: string) => {
-    setSelectedId(id);
-    const conv = conversations.find((c) => c.id === id);
+const handleSelectConversation = async (id: string) => {
+  setSelectedId(id);
 
-    if (conv) {
-      setSelectedOtherUser(conv.otherUser);
-    } else if (currentEmail) {
-      const { data: parts } = await supabase
-        .from("conversation_participants")
-        .select("user_email")
-        .eq("conversation_id", id);
+  const conv = conversations.find((c) => c.id === id);
 
-      if (parts && parts.length > 0) {
-        const otherEmail =
-          parts.find((p) => p.user_email !== currentEmail)?.user_email ??
-          parts[0].user_email;
-        const profile = await fetchProfileByEmail(otherEmail);
-        if (profile) setSelectedOtherUser(profile);
-      }
+  if (conv) {
+    setSelectedOtherUser(conv.otherUser);
+  } else if (currentEmail) {
+    const { data: parts, error } = await supabase.rpc("get_participants", {
+      p_conversation_id: id,
+    });
+
+    if (!error && parts && (parts as any[]).length > 0) {
+      const otherEmail =
+        (parts as any[]).find((p) => p.user_email !== currentEmail)?.user_email ??
+        (parts as any[])[0].user_email;
+
+      const profile = await fetchProfileByEmail(otherEmail);
+      if (profile) setSelectedOtherUser(profile);
     }
+  }
 
-    if (currentEmail) {
-      await markConversationRead(id, currentEmail);
-      const updated = await fetchConversationsForUser(currentEmail);
-      setConversations(updated);
-    }
-  };
+  if (currentEmail) {
+    await markConversationRead(id, currentEmail);
+    const updated = await fetchConversationsForUser(currentEmail);
+    setConversations(updated);
+  }
+};
 
   const handleConversationCreated = async (conversationId: string) => {
     if (!currentEmail) return;
@@ -637,9 +634,7 @@ function MensajesPageInner() {
       <div className="grid flex-1 grid-cols-1 gap-4 md:grid-cols-12">
         <div className="md:col-span-4">
           {loadingConvs && (
-            <div className="mb-2 text-xs text-slate-400">
-              Cargando conversaciones...
-            </div>
+            <div className="mb-2 text-xs text-slate-400">Cargando conversaciones...</div>
           )}
           <ChatList
             conversations={conversations}
@@ -650,6 +645,7 @@ function MensajesPageInner() {
             onNewChat={() => setNewChatOpen(true)}
           />
         </div>
+
         <div className="md:col-span-8">
           {currentEmail ? (
             <ChatView
@@ -677,10 +673,6 @@ function MensajesPageInner() {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                         WRAPPER CON <Suspense> (FIX)                       */
-/* -------------------------------------------------------------------------- */
-
 export default function MensajesPage() {
   return (
     <Suspense
@@ -694,3 +686,4 @@ export default function MensajesPage() {
     </Suspense>
   );
 }
+
