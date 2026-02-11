@@ -8,31 +8,18 @@ import { Target, ArrowRight, RefreshCw } from "lucide-react";
 type Option = { value: string; label: string };
 
 type FormState = {
-  // 1
   area: string;
-  // 2
   objective: string;
-  // 3
   weeklyTime: string;
-  // 4
   tutorStyle: string;
-  // 5
   learningFormat: string;
-  // 6
   level: string;
-  // 7
   frequency: string;
-  // 8
   modalityStudy: string;
-  // 9
   materials: string;
-  // 10
   rigor: string;
-  // 11
   preferences: string;
-  // 12
   expected: string;
-
   notes: string;
 };
 
@@ -179,6 +166,95 @@ const QUESTIONS = [
   },
 ] as const;
 
+/**
+ * ✅ Mapeo respuestas -> tag.name (usa el seed que te di)
+ * Esto te permite llenar assessment_tags automáticamente.
+ */
+const TAG_MAP = {
+  area: {
+    matematicas: "area_matematicas",
+    programacion: "area_programacion",
+    fisica_quimica: "area_fisica_quimica",
+    idiomas: "area_idiomas",
+    sociales_humanidades: "area_sociales_humanidades",
+    otra: "area_otra",
+  },
+  objective: {
+    aprobar_materia: "obj_aprobar_materia",
+    subir_promedio: "obj_subir_promedio",
+    preparar_examen: "obj_preparar_examen",
+    aprender_cero: "obj_aprender_desde_cero",
+    resolver_tareas: "obj_resolver_tareas",
+    preparacion_profesional: "obj_preparacion_profesional",
+  },
+  weeklyTime: {
+    lt_2h: "time_menos_2h",
+    "2_5h": "time_2_5h",
+    "5_10h": "time_5_10h",
+    gt_10h: "time_mas_10h",
+  },
+  tutorStyle: {
+    paso_a_paso: "style_paso_a_paso",
+    ejercicios: "style_ejercicios",
+    dudas_rapidas: "style_dudas_rapidas",
+    dinamico: "style_dinamico",
+    examen: "style_enfocado_examen",
+  },
+  learningFormat: {
+    videollamada: "format_videollamada",
+    videos_grabados: "format_videos_grabados",
+    pdfs: "format_pdfs",
+    interactivos: "format_interactivo",
+    foros_chat: "format_chat_foros",
+  },
+  level: {
+    basico: "level_basico",
+    intermedio: "level_intermedio",
+    avanzado: "level_avanzado",
+    experto: "level_experto",
+  },
+  frequency: {
+    diario: "freq_diario",
+    "2_3_semana": "freq_2_3_semana",
+    "1_semana": "freq_1_semana",
+    cuando_dudas: "freq_solo_dudas",
+  },
+  modalityStudy: {
+    individual: "mode_individual",
+    grupo_pequeno: "mode_grupo_pequeno",
+    comunidad: "mode_comunidad",
+    autoestudio: "mode_autoestudio",
+  },
+  materials: {
+    ejercicios_resueltos: "mat_ejercicios_resueltos",
+    resumen_teoria: "mat_resumen_teoria",
+    examenes_practica: "mat_examenes_practica",
+    videos_explicativos: "mat_videos_explicativos",
+    guias_paso_a_paso: "mat_guias_paso_a_paso",
+  },
+  rigor: {
+    relajado: "rigor_relajado",
+    equilibrado: "rigor_equilibrado",
+    estricto: "rigor_estricto",
+    muy_exigente: "rigor_muy_exigente",
+  },
+  preferences: {
+    paciencia: "pref_paciencia",
+    experiencia: "pref_experiencia",
+    claridad: "pref_claridad",
+    rapidez: "pref_rapidez",
+    motivacion: "pref_motivacion",
+  },
+  expected: {
+    mejores_asesores: "expect_mejores_asesores",
+    materiales_personalizados: "expect_materiales_personalizados",
+    plan_estudio: "expect_plan_estudio",
+    todo: "expect_todo",
+  },
+} as const;
+
+type TagMapKey = keyof typeof TAG_MAP;
+
 export default function AssessmentPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -259,19 +335,15 @@ export default function AssessmentPage() {
   };
 
   /**
-   * Guarda el assessment.
-   * Nota: este código asume que tienes estas columnas en public.assessments:
-   * - student_email, subject, modality, topic, notes, created_at
-   *
-   * Como tus 12 preguntas no caben en el esquema actual, lo guardo en:
-   * - subject: "Assessment v1"
-   * - topic: área + objetivo
-   * - notes: JSON string con todas las respuestas (para que tu algoritmo KNN lo pueda leer)
-   *
-   * Si prefieres crear columnas dedicadas, te lo adapto.
+   * ✅ Paso 5 agregado:
+   *  - Guardar assessment
+   *  - Guardar assessment_tags (mapeo a tags)
+   *  - Llamar API route /api/recommend-tutors con assessment_id
+   *  - Redirigir a Lobby
    */
   const onSubmit = async () => {
     if (!userEmail) return;
+
     if (!isComplete) {
       setUiError("Completa todas las preguntas antes de guardar.");
       return;
@@ -282,6 +354,7 @@ export default function AssessmentPage() {
     setUiOk(null);
 
     try {
+      // 1) Payload (para auditoría y debug)
       const payload = {
         v: 1,
         area: form.area,
@@ -299,6 +372,7 @@ export default function AssessmentPage() {
         notes: form.notes.trim() || null,
       };
 
+      // 2) Insert assessment
       const topic = `${form.area} | ${form.objective}`;
 
       const { data: assessment, error: errA } = await supabase
@@ -306,7 +380,7 @@ export default function AssessmentPage() {
         .insert({
           student_email: userEmail,
           subject: "Assessment v1",
-          modality: "online", // Este "modality" es el campo de tu tabla; aquí no equivale a la pregunta 8.
+          modality: "online", // campo del schema (separado de tu pregunta 8, que es modalityStudy)
           topic,
           notes: JSON.stringify(payload),
         })
@@ -318,6 +392,52 @@ export default function AssessmentPage() {
         return;
       }
 
+      // 3) Resolver tag_ids a partir de tag.name (seed) y guardar assessment_tags
+      const tagNames: string[] = [];
+
+      (Object.keys(TAG_MAP) as TagMapKey[]).forEach((k) => {
+        const answer = form[k] as string;
+        const tagName = (TAG_MAP[k] as any)[answer] as string | undefined;
+        if (tagName) tagNames.push(tagName);
+      });
+
+      // Seguridad extra
+      const uniqueTagNames = Array.from(new Set(tagNames));
+      if (uniqueTagNames.length === 0) {
+        setUiError("No se pudieron derivar tags del formulario. Revisa TAG_MAP y el seed de tags.");
+        return;
+      }
+
+      const { data: tagRows, error: errTags } = await supabase
+        .from("tags")
+        .select("id,name")
+        .in("name", uniqueTagNames);
+
+      if (errTags) {
+        setUiError(`Error cargando tags: ${errTags.message}`);
+        return;
+      }
+
+      const nameToId = new Map<string, number>((tagRows ?? []).map((t: any) => [t.name, t.id]));
+      const missing = uniqueTagNames.filter((n) => !nameToId.has(n));
+      if (missing.length > 0) {
+        setUiError(`Faltan tags en BD (seed incompleto): ${missing.join(", ")}`);
+        return;
+      }
+
+      const rows = uniqueTagNames.map((name) => ({
+        assessment_id: assessment.id,
+        tag_id: nameToId.get(name)!,
+        weight: 1,
+      }));
+
+      const { error: errAT } = await supabase.from("assessment_tags").insert(rows);
+      if (errAT) {
+        setUiError(`Assessment guardado, pero falló assessment_tags: ${errAT.message}`);
+        return;
+      }
+
+      // 4) Log event
       await supabase.from("user_events").insert({
         user_email: userEmail,
         event_type: "assessment_submit_v1",
@@ -326,7 +446,23 @@ export default function AssessmentPage() {
         meta: payload,
       });
 
-      setUiOk("¡Listo! Guardamos tu formulario. Ahora verás recomendaciones en el Lobby.");
+      // ✅ 5) Llamar API route que corre KNN y guarda tutor_recommendations
+      const resp = await fetch("/api/recommend-tutors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assessment_id: assessment.id }),
+      });
+
+      if (!resp.ok) {
+        const errJson = await resp.json().catch(() => ({}));
+        setUiError(
+          `Assessment guardado, pero falló recomendación: ${errJson?.error ?? resp.statusText}`,
+        );
+        // Igual puedes mandar al lobby si quieres, pero aquí lo dejo en UI para depurar.
+        return;
+      }
+
+      setUiOk("¡Listo! Guardamos tu formulario y generamos recomendaciones. Redirigiendo…");
       setTimeout(() => {
         window.location.href = "/dashboard/lobby";
       }, 650);
@@ -372,7 +508,7 @@ export default function AssessmentPage() {
           </div>
 
           <button
-            onClick={() => window.location.href = "/dashboard/lobby"}
+            onClick={() => (window.location.href = "/dashboard/lobby")}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/20 px-4 py-2 text-sm text-slate-200 hover:border-purple-500/50"
           >
             <ArrowRight className="h-4 w-4" />
@@ -444,7 +580,7 @@ export default function AssessmentPage() {
         </button>
 
         <div className="text-xs text-slate-400">
-          Requisito: responder las 12 preguntas. (Este formulario se guarda y luego alimenta tu recomendación KNN).
+          Requisito: responder las 12 preguntas. (Se guardan tags + se corre KNN via API route).
         </div>
       </div>
     </section>
