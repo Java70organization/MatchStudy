@@ -23,6 +23,18 @@ type FormState = {
   notes: string;
 };
 
+type TagRow = { id: number; name: string };
+
+function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return "Error desconocido";
+  }
+}
+
 const QUESTIONS = [
   {
     key: "area" as const,
@@ -167,8 +179,7 @@ const QUESTIONS = [
 ] as const;
 
 /**
- * ✅ Mapeo respuestas -> tag.name (usa el seed que te di)
- * Esto te permite llenar assessment_tags automáticamente.
+ * ✅ Mapeo respuestas -> tag.name
  */
 const TAG_MAP = {
   area: {
@@ -255,6 +266,12 @@ const TAG_MAP = {
 
 type TagMapKey = keyof typeof TAG_MAP;
 
+/** Devuelve el tag.name correspondiente a (pregunta, respuesta) */
+function getTagName<K extends TagMapKey>(key: K, answer: string): string | null {
+  const mapForKey = TAG_MAP[key] as Record<string, string>;
+  return mapForKey[answer] ?? null;
+}
+
 export default function AssessmentPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -319,28 +336,21 @@ export default function AssessmentPage() {
             return;
           }
         }
-      } catch (e) {
+      } catch (e: unknown) {
         console.error(e);
-        setUiError("Error inicializando formulario");
+        setUiError(`Error inicializando formulario: ${errorMessage(e)}`);
       } finally {
         setLoading(false);
       }
     };
 
-    init();
+    void init();
   }, []);
 
   const setAnswer = (key: keyof FormState, value: string) => {
     setForm((p) => ({ ...p, [key]: value }));
   };
 
-  /**
-   * ✅ Paso 5 agregado:
-   *  - Guardar assessment
-   *  - Guardar assessment_tags (mapeo a tags)
-   *  - Llamar API route /api/recommend-tutors con assessment_id
-   *  - Redirigir a Lobby
-   */
   const onSubmit = async () => {
     if (!userEmail) return;
 
@@ -354,9 +364,9 @@ export default function AssessmentPage() {
     setUiOk(null);
 
     try {
-      // 1) Payload (para auditoría y debug)
+      // 1) Payload (auditoría / debug)
       const payload = {
-        v: 1,
+        v: 1 as const,
         area: form.area,
         objective: form.objective,
         weeklyTime: form.weeklyTime,
@@ -380,51 +390,52 @@ export default function AssessmentPage() {
         .insert({
           student_email: userEmail,
           subject: "Assessment v1",
-          modality: "online", // campo del schema (separado de tu pregunta 8, que es modalityStudy)
+          modality: "online",
           topic,
           notes: JSON.stringify(payload),
         })
         .select("id")
-        .single();
+        .single<{ id: string }>();
 
       if (errA || !assessment?.id) {
         setUiError(`No se pudo guardar el assessment: ${errA?.message ?? "Error desconocido"}`);
         return;
       }
 
-      // 3) Resolver tag_ids a partir de tag.name (seed) y guardar assessment_tags
+      // 3) Obtener tag.name derivados del formulario
       const tagNames: string[] = [];
-
       (Object.keys(TAG_MAP) as TagMapKey[]).forEach((k) => {
         const answer = form[k] as string;
-        const tagName = (TAG_MAP[k] as any)[answer] as string | undefined;
+        const tagName = getTagName(k, answer);
         if (tagName) tagNames.push(tagName);
       });
 
-      // Seguridad extra
       const uniqueTagNames = Array.from(new Set(tagNames));
       if (uniqueTagNames.length === 0) {
         setUiError("No se pudieron derivar tags del formulario. Revisa TAG_MAP y el seed de tags.");
         return;
       }
 
+      // 4) Resolver tag_ids a partir de tags.name
       const { data: tagRows, error: errTags } = await supabase
         .from("tags")
         .select("id,name")
-        .in("name", uniqueTagNames);
+        .in("name", uniqueTagNames)
+        .returns<TagRow[]>();
 
       if (errTags) {
         setUiError(`Error cargando tags: ${errTags.message}`);
         return;
       }
 
-      const nameToId = new Map<string, number>((tagRows ?? []).map((t: any) => [t.name, t.id]));
+      const nameToId = new Map<string, number>((tagRows ?? []).map((t) => [t.name, t.id]));
       const missing = uniqueTagNames.filter((n) => !nameToId.has(n));
       if (missing.length > 0) {
         setUiError(`Faltan tags en BD (seed incompleto): ${missing.join(", ")}`);
         return;
       }
 
+      // 5) Insert assessment_tags
       const rows = uniqueTagNames.map((name) => ({
         assessment_id: assessment.id,
         tag_id: nameToId.get(name)!,
@@ -437,7 +448,7 @@ export default function AssessmentPage() {
         return;
       }
 
-      // 4) Log event
+      // 6) Log event
       await supabase.from("user_events").insert({
         user_email: userEmail,
         event_type: "assessment_submit_v1",
@@ -446,7 +457,7 @@ export default function AssessmentPage() {
         meta: payload,
       });
 
-      // ✅ 5) Llamar API route que corre KNN y guarda tutor_recommendations
+      // 7) Llamar API route para KNN / recomendaciones
       const resp = await fetch("/api/recommend-tutors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -454,11 +465,13 @@ export default function AssessmentPage() {
       });
 
       if (!resp.ok) {
-        const errJson = await resp.json().catch(() => ({}));
-        setUiError(
-          `Assessment guardado, pero falló recomendación: ${errJson?.error ?? resp.statusText}`,
-        );
-        // Igual puedes mandar al lobby si quieres, pero aquí lo dejo en UI para depurar.
+        const errJson: unknown = await resp.json().catch(() => ({}));
+        const msg =
+          typeof errJson === "object" && errJson !== null && "error" in errJson
+            ? String((errJson as Record<string, unknown>).error ?? resp.statusText)
+            : resp.statusText;
+
+        setUiError(`Assessment guardado, pero falló recomendación: ${msg}`);
         return;
       }
 
@@ -466,6 +479,9 @@ export default function AssessmentPage() {
       setTimeout(() => {
         window.location.href = "/dashboard/lobby";
       }, 650);
+    } catch (e: unknown) {
+      console.error(e);
+      setUiError(`Error guardando formulario: ${errorMessage(e)}`);
     } finally {
       setSaving(false);
     }
