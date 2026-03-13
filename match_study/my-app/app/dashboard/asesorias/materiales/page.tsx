@@ -571,7 +571,7 @@ export default function MaterialesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
-  const [dateRange, setDateRange] = useState<DateRange>("today");
+  const [dateRange, setDateRange] = useState<DateRange>("all");
 
   const [openNew, setOpenNew] = useState(false);
   const [previewMaterial, setPreviewMaterial] = useState<MaterialRow | null>(

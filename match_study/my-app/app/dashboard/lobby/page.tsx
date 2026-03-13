@@ -3,8 +3,10 @@
 import type React from "react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { checkUserProfile } from "@/lib/supabase/user";
+import { getOrCreateConversation } from "@/lib/supabase/chat";
 import {
   Users,
   BookOpen,
@@ -113,6 +115,10 @@ export default function LobbyPage() {
   const [tutorRecs, setTutorRecs] = useState<TutorRecommendationRow[]>([]);
   const [hasAssessment, setHasAssessment] = useState<boolean>(false);
 
+  // modal for tutor actions (schedule / message)
+  const [selectedTutor, setSelectedTutor] = useState<TutorRecommendationRow | null>(null);
+  const [showTutorModal, setShowTutorModal] = useState(false);
+
   const [uiError, setUiError] = useState<string | null>(null);
 
   const sections = useMemo(
@@ -152,7 +158,7 @@ export default function LobbyPage() {
       // 1) Para ti: RPC
       const { data: paraTi, error: errPT } = await supabase.rpc("get_feeds_para_ti", {
         p_user_email: email,
-        p_limit: 12,
+        p_limit: 9,
       });
 
       // 2) Tendencias: view
@@ -217,7 +223,7 @@ export default function LobbyPage() {
         .select("tutor_email, score, model_version, created_at")
         .eq("assessment_id", lastAssessment.id)
         .order("score", { ascending: false })
-        .limit(8);
+        .limit(12);
 
       if (errR) {
         setUiError(`Recomendaciones: ${errR.message}`);
@@ -360,10 +366,19 @@ export default function LobbyPage() {
   };
 
   const onOpenTutor = async (tutorEmail: string) => {
+    // legacy navigation (not used by recommendation cards anymore)
     if (userEmail) {
       await logEvent(userEmail, "tutor_rec_click", "feed", 0, { tutorEmail });
     }
     window.location.href = `/tutores?email=${encodeURIComponent(tutorEmail)}`;
+  };
+
+  const onSelectTutor = async (t: TutorRecommendationRow) => {
+    if (userEmail) {
+      await logEvent(userEmail, "tutor_rec_click", "feed", 0, { tutorEmail: t.tutor_email });
+    }
+    setSelectedTutor(t);
+    setShowTutorModal(true);
   };
 
   if (loading) {
@@ -509,7 +524,7 @@ export default function LobbyPage() {
               {tutorRecs.map((t) => (
                 <button
                   key={t.tutor_email}
-                  onClick={() => onOpenTutor(t.tutor_email)}
+                  onClick={() => onSelectTutor(t)}
                   className="text-left rounded-2xl border border-slate-800 bg-slate-950/20 p-4 hover:border-purple-500/40 transition-all"
                 >
                   <div className="flex items-start gap-3">
@@ -536,23 +551,7 @@ export default function LobbyPage() {
 
                       {t.bio && <p className="mt-2 text-sm text-slate-300 line-clamp-2">{t.bio}</p>}
 
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
-                        {t.modality && (
-                          <span className="rounded-lg border border-slate-800 bg-slate-900/40 px-2 py-1">
-                            {t.modality}
-                          </span>
-                        )}
-                        {formatRate(t) && (
-                          <span className="rounded-lg border border-slate-800 bg-slate-900/40 px-2 py-1">
-                            {formatRate(t)}
-                          </span>
-                        )}
-                        {t.location && (
-                          <span className="rounded-lg border border-slate-800 bg-slate-900/40 px-2 py-1">
-                            {t.location}
-                          </span>
-                        )}
-                      </div>
+                      
                     </div>
                   </div>
                 </button>
@@ -698,12 +697,21 @@ export default function LobbyPage() {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-2">
-          <QuickLink href="/feeds" label="Ir a Feeds" />
-          <QuickLink href="/salas" label="Ir a Salas" />
-          <QuickLink href="/materiales" label="Ir a Biblioteca" />
-          <QuickLink href="/mensajes" label="Mensajes" />
+          <QuickLink href="/dashboard/asesorias/feeds" label="Ir a Feeds" />
+          <QuickLink href="/dashboard/asesorias/salas" label="Ir a Salas" />
+          <QuickLink href="/dashboard/asesorias/materiales" label="Ir a Biblioteca" />
+          <QuickLink href="/dashboard/asesorias/mensajes" label="Mensajes" />
         </div>
       </div>
+
+      {/* tutor actions popup */}
+      <TutorActionsModal
+        open={showTutorModal}
+        tutor={selectedTutor}
+        currentEmail={userEmail}
+        onClose={() => setShowTutorModal(false)}
+        logEvent={logEvent}
+      />
     </section>
   );
 }
@@ -738,5 +746,223 @@ function QuickLink({ href, label }: { href: string; label: string }) {
     >
       {label}
     </a>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Modal that appears when a tutor recommendation is clicked
+// provides quick actions: agendar sesión o enviar mensaje.
+// ----------------------------------------------------------------------------
+
+function TutorActionsModal({
+  open,
+  tutor,
+  currentEmail,
+  onClose,
+  logEvent,
+}: {
+  open: boolean;
+  tutor: TutorRecommendationRow | null;
+  currentEmail: string | null;
+  onClose: () => void;
+  logEvent: (email: string, event_type: string, entity_type: "feed" | "material" | "sala", entity_id: number, meta?: Record<string, unknown>) => Promise<void>;
+}) {
+  const router = useRouter();
+
+  const [step, setStep] = useState<"actions" | "schedule">("actions");
+  const [title, setTitle] = useState("");
+  const [datetime, setDatetime] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [messaging, setMessaging] = useState(false);
+
+  const reset = () => {
+    setStep("actions");
+    setTitle("");
+    setDatetime("");
+    setCreating(false);
+    setError(null);
+    setMessaging(false);
+  };
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  const handleMessage = async () => {
+    if (!currentEmail || !tutor) return;
+    if (currentEmail) await logEvent(currentEmail, "tutor_message_initiate", "feed", 0, { tutorEmail: tutor.tutor_email });
+    setMessaging(true);
+    try {
+      const convId = await getOrCreateConversation(currentEmail, tutor.tutor_email);
+      handleClose();
+      router.push(`/dashboard/asesorias/mensajes?c=${encodeURIComponent(convId)}`);
+    } catch (e) {
+      console.error("error creando chat:", e);
+      setError("No se pudo iniciar el chat");
+    } finally {
+      setMessaging(false);
+    }
+  };
+
+  const handleCreateSession = async () => {
+    if (!currentEmail || !tutor) return;
+    if (currentEmail) await logEvent(currentEmail, "tutor_schedule_initiate", "feed", 0, { tutorEmail: tutor.tutor_email });
+    if (!title.trim()) {
+      setError("El título es requerido.");
+      return;
+    }
+    if (!datetime) {
+      setError("Selecciona fecha y hora.");
+      return;
+    }
+
+    setError(null);
+    setCreating(true);
+
+    try {
+      const dateObj = new Date(datetime);
+      if (Number.isNaN(dateObj.getTime())) {
+        setError("Fecha/hora inválida.");
+        setCreating(false);
+        return;
+      }
+      const iso = dateObj.toISOString();
+      const codigoSala =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2, 10);
+
+      const { data, error: err } = await supabase
+        .from("salas")
+        .insert({
+          hora: iso,
+          fecha: iso,
+          codigoSala,
+          titulo: title.trim(),
+          asesor: tutor.tutor_email,
+          estudiante: currentEmail,
+        })
+        .select("id") // we don't actually need the full row here
+        .single();
+
+      if (err) throw err;
+
+      // Insert notification for the tutor
+      await supabase.from("notifications").insert({
+        user_email: tutor.tutor_email,
+        title: "Nueva sesión agendada",
+        body: `Sesión agendada con ${currentEmail} el ${dateObj.toLocaleString('es-ES')}`,
+        created_at: new Date().toISOString(),
+      });
+
+      handleClose();
+      router.push("/dashboard/asesorias/salas");
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : "Error creando la sala");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  if (!open || !tutor) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div className="absolute inset-0" onClick={handleClose} />
+      <div className="relative z-50 w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/95 p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">Acciones para tutor</h2>
+          <button
+            onClick={handleClose}
+            className="rounded-full px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center">
+              {tutor.urlFoto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={tutor.urlFoto} alt={formatName(tutor)} className="h-full w-full object-cover" />
+              ) : (
+                <GraduationCap className="h-6 w-6 text-purple-300" />
+              )}
+            </div>
+            <div className="flex-1">
+              <div className="text-white font-semibold line-clamp-1">{formatName(tutor)}</div>
+              {tutor.universidad && (
+                <div className="text-xs text-slate-400 line-clamp-1">{tutor.universidad}</div>
+              )}
+            </div>
+          </div>
+
+          {step === "actions" && (
+            <div className="space-y-3">
+              <button
+                onClick={() => setStep("schedule")}
+                className="w-full rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500"
+              >
+                Agendar sesión
+              </button>
+              <button
+                onClick={handleMessage}
+                disabled={messaging}
+                className="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 hover:border-purple-500/50 disabled:opacity-60"
+              >
+                {messaging ? "Creando chat..." : "Enviar mensaje"}
+              </button>
+            </div>
+          )}
+
+          {step === "schedule" && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs text-slate-400">Título</label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Ej: Tutoría con tutor"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-400">Fecha y hora</label>
+                <input
+                  type="datetime-local"
+                  value={datetime}
+                  onChange={(e) => setDatetime(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              {error && <p className="text-xs text-red-400">{error}</p>}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStep("actions")}
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300 hover:bg-slate-800"
+                >
+                  ← Volver
+                </button>
+                <button
+                  type="button"
+                  disabled={creating}
+                  onClick={handleCreateSession}
+                  className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {creating ? "Agendando..." : "Confirmar sesión"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

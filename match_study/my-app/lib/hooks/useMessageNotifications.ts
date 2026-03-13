@@ -24,9 +24,31 @@ export function useMessageNotifications(currentEmail: string | null) {
 
     load();
 
-    // Opcional: refresco periódico
+    // Subscripción en tiempo real a notificaciones nuevas
+    const channel = supabase
+      .channel(`notifications:${currentEmail}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_email=eq.${currentEmail}`,
+        },
+        (payload) => {
+          const newNotif = (payload as any)?.new as MessageNotification | undefined;
+          if (newNotif) setNotifications((prev) => [newNotif, ...prev]);
+        },
+      )
+      .subscribe();
+
+    // Opcional: refresco periódico como fallback
     const interval = setInterval(load, 15000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, [currentEmail]);
 
   const unreadCount = notifications.length;

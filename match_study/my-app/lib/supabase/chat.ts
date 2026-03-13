@@ -257,6 +257,25 @@ export async function sendMessage(
     .single();
 
   if (error || !data) return null;
+
+  // Insert notification for the receiver
+  const { data: conv, error: convError } = await supabase
+    .from("conversations")
+    .select("participant1_email, participant2_email")
+    .eq("id", conversationId)
+    .single();
+
+  if (!convError && conv) {
+    const receiverEmail = conv.participant1_email === senderEmail ? conv.participant2_email : conv.participant1_email;
+    await supabase.from("notifications").insert({
+      user_email: receiverEmail,
+      title: "Nuevo mensaje",
+      body: content.length > 50 ? content.substring(0, 50) + "..." : content,
+      conversation_id: conversationId,
+      created_at: new Date().toISOString(),
+    });
+  }
+
   return data as ChatMessage;
 }
 

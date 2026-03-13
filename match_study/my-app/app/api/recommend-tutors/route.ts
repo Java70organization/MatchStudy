@@ -49,6 +49,16 @@ function cosineSim(a: Map<number, number>, b: Map<number, number>) {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+// This route implements a simple k‑NN style recommendation for tutors based on
+// the tags that a student selects in an assessment. The original version used a
+// raw cosine similarity on weight vectors; v2 introduces several enhancements:
+//   * Inverse document frequency (IDF) weighting to give more importance to
+//     tags that are rare across tutors.
+//   * A small bonus proportional to the number of matching tags.
+//   * Model version is bumped to "knn_v2" when persisting results.
+// These tweaks help the system prefer tutors who match distinctive needs and
+// discourage recommendations driven solely by ubiquitous tags.
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as RequestBody;
@@ -133,11 +143,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `tutor_skills error: ${errS.message}` }, { status: 500 });
     }
 
+    // construir mapa de skills y, al mismo tiempo, conteos por tag para IDF
     const skillsByTutor = new Map<string, Map<number, number>>();
+    const tagCounts = new Map<number, number>();
     (tSkills as TutorSkillRow[] | null)?.forEach((r) => {
       if (!skillsByTutor.has(r.user_email)) skillsByTutor.set(r.user_email, new Map());
       skillsByTutor.get(r.user_email)!.set(r.tag_id, r.weight ?? 1);
+
+      // llevar conteo para idf
+      tagCounts.set(r.tag_id, (tagCounts.get(r.tag_id) ?? 0) + 1);
     });
+
+    // calcular idf para cada tag (los tags menos frecuentes obtienen mayor peso)
+    const totalTutors = tutorEmails.length || 1;
+    const idfMap = new Map<number, number>();
+    tagCounts.forEach((count, tagId) => {
+      // log((N+1)/(count+1)) + 1 para evitar valores cero
+      idfMap.set(tagId, Math.log((totalTutors + 1) / (count + 1)) + 1);
+    });
+
+    // aplicar idf al vector del estudiante
+    const weightedStudentVec = new Map<number, number>();
+    for (const [tagId, w] of studentVec.entries()) {
+      weightedStudentVec.set(tagId, w * (idfMap.get(tagId) ?? 1));
+    }
 
     // 5) Score + filtros suaves (modalidad y presupuesto)
     const wantModality = (assessment.modality ?? "online") as "online" | "presencial" | "ambos";
@@ -163,8 +192,19 @@ export async function POST(req: Request) {
         if (tMax !== null && bMin !== null && tMax < bMin) continue;
       }
 
-      const sim = cosineSim(studentVec, tutorVec);
-      if (sim > 0) scored.push({ tutor_email: email, score: sim });
+      // aplicar idf al vector del tutor antes de calcular similitud
+      const weightedTutorVec = new Map<number, number>();
+      for (const [tagId, w] of tutorVec.entries()) {
+        weightedTutorVec.set(tagId, w * (idfMap.get(tagId) ?? 1));
+      }
+
+      const sim = cosineSim(weightedStudentVec, weightedTutorVec);
+      if (sim > 0) {
+        // cuantos tags coinciden (antes de ponderar) – se usa para dar un bonus ligero
+        const overlap = [...weightedStudentVec.keys()].filter((k) => weightedTutorVec.has(k)).length;
+        const adjusted = sim * (1 + overlap * 0.05);
+        scored.push({ tutor_email: email, score: adjusted });
+      }
     }
 
     scored.sort((a, b) => b.score - a.score);
@@ -185,7 +225,7 @@ export async function POST(req: Request) {
         assessment_id: assessmentId,
         tutor_email: r.tutor_email,
         score: r.score,
-        model_version: "knn_v1",
+        model_version: "knn_v2",
       }));
 
       const { error: errSave } = await supabase.from("tutor_recommendations").insert(rows);

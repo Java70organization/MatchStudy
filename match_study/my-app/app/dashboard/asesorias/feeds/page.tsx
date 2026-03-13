@@ -230,7 +230,7 @@ export default function FeedsPage() {
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [dateRange, setDateRange] = useState<DateRange>("today");
+  const [dateRange, setDateRange] = useState<DateRange>("all");
   const [tagFilter, setTagFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<SortBy>("recent");
 

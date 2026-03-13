@@ -156,6 +156,31 @@ export default function ProgramarSalaPage() {
         throw new Error(insErr.message);
       }
 
+      // Insertar notificaciones en la campanita para participantes
+      try {
+        const when = fecha
+          ? new Date(fecha).toLocaleString()
+          : new Date().toLocaleString();
+        const title = `Sesión programada: ${titulo || codigoSala}`;
+        const body = `Se ha programado una nueva sala de asesoría.\n\nTítulo: ${
+          titulo || "(sin título)"
+        }\nFecha/Hora: ${when}\n\nIngresa a MatchStudy para ver los detalles de la sesión.`;
+
+        const targets = [asesor, estudiante].filter(Boolean) as string[];
+        await Promise.all(
+          targets.map((user_email) =>
+            supabase.from("notifications").insert({
+              user_email,
+              title,
+              body,
+              created_at: new Date().toISOString(),
+            }),
+          ),
+        );
+      } catch (notifyErr) {
+        console.warn("No se pudo crear notificación en la campanita", notifyErr);
+      }
+
       // Enviar correos de notificación
       try {
         const when = fecha
