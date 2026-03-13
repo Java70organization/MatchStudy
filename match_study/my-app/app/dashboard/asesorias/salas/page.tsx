@@ -432,7 +432,7 @@ export default function SalasPage() {
     );
 
     return byFilter;
-  }, [mine, filter, now]);
+  }, [mine, filter, now, isFinished]);
 
   // calendario (mes actual)
   const year = now.getFullYear();

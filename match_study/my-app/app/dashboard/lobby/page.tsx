@@ -88,14 +88,6 @@ function formatName(r: TutorRecommendationRow) {
   return full || r.tutor_email;
 }
 
-function formatRate(r: TutorRecommendationRow) {
-  const min = r.hourly_rate_min ?? null;
-  const max = r.hourly_rate_max ?? null;
-  if (min == null && max == null) return null;
-  if (min != null && max != null) return `$${min}–$${max}/h`;
-  return `$${min ?? max}/h`;
-}
-
 export default function LobbyPage() {
   const [loading, setLoading] = useState(true);
   const [feedLoading, setFeedLoading] = useState(false);
@@ -363,14 +355,6 @@ export default function LobbyPage() {
       await logEvent(userEmail, "assessment_cta_click", "feed", 0, {});
     }
     window.location.href = "/assessment";
-  };
-
-  const onOpenTutor = async (tutorEmail: string) => {
-    // legacy navigation (not used by recommendation cards anymore)
-    if (userEmail) {
-      await logEvent(userEmail, "tutor_rec_click", "feed", 0, { tutorEmail });
-    }
-    window.location.href = `/tutores?email=${encodeURIComponent(tutorEmail)}`;
   };
 
   const onSelectTutor = async (t: TutorRecommendationRow) => {
@@ -834,7 +818,7 @@ function TutorActionsModal({
           ? crypto.randomUUID()
           : Math.random().toString(36).slice(2, 10);
 
-      const { data, error: err } = await supabase
+      const { error: err } = await supabase
         .from("salas")
         .insert({
           hora: iso,

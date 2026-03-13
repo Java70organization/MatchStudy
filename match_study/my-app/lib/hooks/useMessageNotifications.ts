@@ -35,8 +35,8 @@ export function useMessageNotifications(currentEmail: string | null) {
           table: "notifications",
           filter: `user_email=eq.${currentEmail}`,
         },
-        (payload) => {
-          const newNotif = (payload as any)?.new as MessageNotification | undefined;
+        (payload: { new: MessageNotification }) => {
+          const newNotif = payload.new;
           if (newNotif) setNotifications((prev) => [newNotif, ...prev]);
         },
       )
