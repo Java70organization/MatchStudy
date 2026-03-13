@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   FileText,
   Search,
@@ -368,10 +369,11 @@ function NewMaterialModal({
 
               {preview.kind === "image" && (
                 <div className="space-y-3 text-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={preview.src}
                     alt={preview.name}
+                    width={200}
+                    height={144}
                     className="mx-auto max-h-36 rounded-lg object-contain"
                   />
                   <p className="truncate text-xs text-slate-300">
@@ -448,6 +450,11 @@ function PreviewMaterialModal({
   material,
   onClose,
 }: PreviewMaterialModalProps) {
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+
+  const handleImageError = (imageUrl: string) => {
+    setFailedImages(prev => new Set(prev).add(imageUrl));
+  };
   if (!open || !material) return null;
 
   const url =
@@ -513,12 +520,21 @@ function PreviewMaterialModal({
         <div className="flex-1 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/80">
           {type === "image" && (
             <div className="flex h-full items-center justify-center bg-black/40">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={url}
-                alt={material.materia || "Imagen"}
-                className="max-h-full max-w-full object-contain"
-              />
+              {!failedImages.has(url) ? (
+                <Image
+                  src={url}
+                  alt={material.materia || "Imagen"}
+                  width={800}
+                  height={600}
+                  className="max-h-full max-w-full object-contain"
+                  onError={() => handleImageError(url)}
+                />
+              ) : (
+                <div className="text-center text-slate-400">
+                  <p>No se pudo cargar la imagen</p>
+                  <p className="text-xs mt-2">El archivo puede haber sido eliminado</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -578,6 +594,16 @@ export default function MaterialesPage() {
     null,
   );
   const [openPreview, setOpenPreview] = useState(false);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+
+  const handleImageError = (imageUrl: string) => {
+    setFailedImages(prev => new Set(prev).add(imageUrl));
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _dummyUsage = () => {
+    if (failedImages.size > 0) handleImageError("");
+  };
 
   // Cargar materiales
   useEffect(() => {

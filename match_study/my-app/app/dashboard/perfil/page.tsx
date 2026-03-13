@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase/client";
 import { checkUserProfile, DBUser } from "@/lib/supabase/user";
 import ProfilePhotoUploader from "./ProfilePhotoUploader";
@@ -36,70 +37,76 @@ export default function PerfilPage() {
     displayName: "",
   });
 
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+
+  const handleImageError = (imageUrl: string) => {
+    setFailedImages(prev => new Set(prev).add(imageUrl));
+  };
+
   useEffect(() => {
     const loadUserProfile = async () => {
-      try {
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-        if (authError || !user) {
-          setError("No hay usuario autenticado");
-          window.location.href = "/auth/login";
-          return;
-        }
+      if (authError || !user) {
+        setError("No hay usuario autenticado");
+        window.location.href = "/auth/login";
+        return;
+      }
 
-        setUserEmail(user.email || "");
+      setUserEmail(user.email || "");
 
-        if (user.email) {
-          const profile = await checkUserProfile(user.email);
+      if (user.email) {
+        const profile = await checkUserProfile(user.email);
 
-          if (profile) {
-            setUserProfile(profile);
+        if (profile) {
+          setUserProfile(profile);
 
-            const authDisplay =
-              (user.user_metadata?.full_name as string | undefined) ||
-              `${profile.nombres || ""} ${profile.apellidos || ""}`.trim();
+          const authDisplay =
+            (user.user_metadata?.full_name as string | undefined) ||
+            `${profile.nombres || ""} ${profile.apellidos || ""}`.trim();
 
-            setForm({
-              nombres: profile.nombres || "",
-              apellidos: profile.apellidos || "",
-              telefono: profile.telefono || "",
-              universidad: profile.universidad || "",
-              displayName: authDisplay || "",
-            });
+          setForm({
+            nombres: profile.nombres || "",
+            apellidos: profile.apellidos || "",
+            telefono: profile.telefono || "",
+            universidad: profile.universidad || "",
+            displayName: authDisplay || "",
+          });
 
-            if (profile.urlFoto) {
-              try {
-                const res = await fetch("/api/profile-photo/signed", {
-                  cache: "no-store",
-                  credentials: "include",
-                });
-                const data = await res.json();
-                setSignedUrl(res.ok ? data.url ?? null : null);
-              } catch {
-                setSignedUrl(null);
-              }
-            } else {
+          if (profile.urlFoto) {
+            try {
+              const res = await fetch("/api/profile-photo/signed", {
+                cache: "no-store",
+                credentials: "include",
+              });
+              const data = await res.json();
+              setSignedUrl(res.ok ? data.url ?? null : null);
+            } catch {
               setSignedUrl(null);
             }
           } else {
-            setError(
-              "No se encontró el perfil del usuario. Completa tu perfil primero.",
-            );
+            setSignedUrl(null);
           }
+        } else {
+          setError(
+            "No se encontró el perfil del usuario. Completa tu perfil primero.",
+          );
         }
-      } catch (err) {
-        console.error("Error cargando perfil:", err);
-        setError("Error al cargar el perfil");
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.error("Error cargando perfil:", err);
+      setError("Error al cargar el perfil");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    loadUserProfile();
-  }, []);
+  loadUserProfile();
+}, []);
 
   /* -------------------------------- LOAD / ERROR ------------------------------- */
 
@@ -260,12 +267,14 @@ export default function PerfilPage() {
           <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/40">
             <div className="flex flex-col items-center gap-4 text-center">
               {/* Avatar */}
-              {signedUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+              {signedUrl && !failedImages.has(signedUrl) ? (
+                <Image
                   src={signedUrl}
                   alt="Foto de perfil"
+                  width={96}
+                  height={96}
                   className="h-24 w-24 rounded-full border border-purple-500/60 object-cover shadow-lg shadow-purple-900/50"
+                  onError={() => handleImageError(signedUrl)}
                 />
               ) : (
                 <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-3xl font-bold text-white shadow-lg shadow-purple-900/50">

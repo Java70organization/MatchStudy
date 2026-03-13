@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { MessageSquare, Search, Plus, Send } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -51,6 +52,11 @@ function NewChatModal({
   const [qs, setQs] = useState("");
   const [selected, setSelected] = useState<UIUser | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+
+  const handleImageError = (imageUrl: string) => {
+    setFailedImages(prev => new Set(prev).add(imageUrl));
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -174,12 +180,14 @@ function NewChatModal({
                   selected?.email === u.email ? "bg-slate-800" : "hover:bg-slate-900"
                 }`}
               >
-                {u.urlFoto ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                {u.urlFoto && !failedImages.has(u.urlFoto) ? (
+                  <Image
                     src={u.urlFoto}
                     alt={u.email}
+                    width={32}
+                    height={32}
                     className="h-8 w-8 rounded-full border border-slate-600 object-cover"
+                    onError={() => handleImageError(u.urlFoto!)}
                   />
                 ) : (
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-xs font-semibold text-white">
@@ -230,6 +238,8 @@ type ChatListProps = {
   search: string;
   onSearchChange: (v: string) => void;
   onNewChat: () => void;
+  failedImages: Set<string>;
+  handleImageError: (imageUrl: string) => void;
 };
 
 function ChatList({
@@ -239,6 +249,8 @@ function ChatList({
   search,
   onSearchChange,
   onNewChat,
+  failedImages,
+  handleImageError,
 }: ChatListProps) {
   const filtered = useMemo(() => {
     const t = search.trim().toLowerCase();
@@ -288,12 +300,14 @@ function ChatList({
                   c.id === selectedId ? "bg-slate-800 border border-slate-700" : "hover:bg-slate-900"
                 }`}
               >
-                {c.otherUser.urlFoto ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                {c.otherUser.urlFoto && !failedImages.has(c.otherUser.urlFoto) ? (
+                  <Image
                     src={c.otherUser.urlFoto}
                     alt={c.otherUser.email}
+                    width={36}
+                    height={36}
                     className="h-9 w-9 rounded-full border border-slate-600 object-cover"
+                    onError={() => handleImageError(c.otherUser.urlFoto!)}
                   />
                 ) : (
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-600 text-xs font-semibold text-white">
@@ -333,13 +347,15 @@ type ChatViewProps = {
   conversationId: string | null;
   currentEmail: string;
   otherUser: Profile | null;
+  failedImages: Set<string>;
+  handleImageError: (src: string) => void;
 };
 
 type MessageInsertPayload = {
   new: ChatMessage;
 };
 
-function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
+function ChatView({ conversationId, currentEmail, otherUser, failedImages, handleImageError }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [input, setInput] = useState("");
@@ -428,12 +444,14 @@ function ChatView({ conversationId, currentEmail, otherUser }: ChatViewProps) {
   return (
     <div className="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900/60">
       <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-3">
-        {otherUser.urlFoto ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+        {otherUser.urlFoto && !failedImages.has(otherUser.urlFoto) ? (
+          <Image
             src={otherUser.urlFoto}
             alt={otherUser.email}
+            width={32}
+            height={32}
             className="h-8 w-8 rounded-full border border-slate-600 object-cover"
+            onError={() => handleImageError(otherUser.urlFoto!)}
           />
         ) : (
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-xs font-semibold text-white">
@@ -516,6 +534,16 @@ function MensajesPageInner() {
   const [selectedOtherUser, setSelectedOtherUser] = useState<Profile | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [loadingConvs, setLoadingConvs] = useState(false);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+
+  const handleImageError = (imageUrl: string) => {
+    setFailedImages(prev => new Set(prev).add(imageUrl));
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _dummyUsage = () => {
+    if (failedImages.size > 0) handleImageError("");
+  };
 
   const params = useSearchParams();
 
@@ -624,12 +652,14 @@ function MensajesPageInner() {
             search={search}
             onSearchChange={setSearch}
             onNewChat={() => setNewChatOpen(true)}
+            failedImages={failedImages}
+            handleImageError={handleImageError}
           />
         </div>
 
         <div className="md:col-span-8">
           {currentEmail ? (
-            <ChatView conversationId={selectedId} currentEmail={currentEmail} otherUser={selectedOtherUser} />
+            <ChatView conversationId={selectedId} currentEmail={currentEmail} otherUser={selectedOtherUser} failedImages={failedImages} handleImageError={handleImageError} />
           ) : (
             <div className="flex h-full items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/40">
               <p className="text-sm text-slate-400">Cargando usuario...</p>

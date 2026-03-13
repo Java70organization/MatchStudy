@@ -112,6 +112,11 @@ export default function LobbyPage() {
   const [showTutorModal, setShowTutorModal] = useState(false);
 
   const [uiError, setUiError] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+
+  const handleImageError = (imageUrl: string) => {
+    setFailedImages(prev => new Set(prev).add(imageUrl));
+  };
 
   const sections = useMemo(
     () => [
@@ -513,9 +518,15 @@ export default function LobbyPage() {
                 >
                   <div className="flex items-start gap-3">
                     <div className="h-12 w-12 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0">
-                      {t.urlFoto ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={t.urlFoto} alt={formatName(t)} className="h-full w-full object-cover" />
+                      {t.urlFoto && !failedImages.has(t.urlFoto) ? (
+                        <Image 
+                          src={t.urlFoto} 
+                          alt={formatName(t)} 
+                          width={48} 
+                          height={48} 
+                          className="h-full w-full object-cover" 
+                          onError={() => handleImageError(t.urlFoto!)}
+                        />
                       ) : (
                         <GraduationCap className="h-6 w-6 text-purple-300" />
                       )}
@@ -695,6 +706,8 @@ export default function LobbyPage() {
         currentEmail={userEmail}
         onClose={() => setShowTutorModal(false)}
         logEvent={logEvent}
+        failedImages={failedImages}
+        handleImageError={handleImageError}
       />
     </section>
   );
@@ -744,12 +757,16 @@ function TutorActionsModal({
   currentEmail,
   onClose,
   logEvent,
+  failedImages,
+  handleImageError,
 }: {
   open: boolean;
   tutor: TutorRecommendationRow | null;
   currentEmail: string | null;
   onClose: () => void;
   logEvent: (email: string, event_type: string, entity_type: "feed" | "material" | "sala", entity_id: number, meta?: Record<string, unknown>) => Promise<void>;
+  failedImages: Set<string>;
+  handleImageError: (src: string) => void;
 }) {
   const router = useRouter();
 
@@ -870,9 +887,15 @@ function TutorActionsModal({
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center">
-              {tutor.urlFoto ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={tutor.urlFoto} alt={formatName(tutor)} className="h-full w-full object-cover" />
+              {tutor.urlFoto && !failedImages.has(tutor.urlFoto) ? (
+                <Image 
+                  src={tutor.urlFoto} 
+                  alt={formatName(tutor)} 
+                  width={40} 
+                  height={40} 
+                  className="h-full w-full object-cover" 
+                  onError={() => handleImageError(tutor.urlFoto!)}
+                />
               ) : (
                 <GraduationCap className="h-6 w-6 text-purple-300" />
               )}

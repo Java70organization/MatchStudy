@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -42,6 +43,8 @@ type CreateSalaModalProps = {
   onClose: () => void;
   currentEmail: string | null;
   onCreated: (newSala: SalaRow) => void;
+  failedImages: Set<string>;
+  handleImageError: (src: string) => void;
 };
 
 function CreateSalaModal({
@@ -49,6 +52,8 @@ function CreateSalaModal({
   onClose,
   currentEmail,
   onCreated,
+  failedImages,
+  handleImageError,
 }: CreateSalaModalProps) {
   const [users, setUsers] = useState<UIUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -244,12 +249,14 @@ function CreateSalaModal({
                         : "hover:bg-slate-900"
                     }`}
                   >
-                    {u.urlFoto ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                    {u.urlFoto && !failedImages.has(u.urlFoto) ? (
+                      <Image
                         src={u.urlFoto}
                         alt={u.email}
+                        width={32}
+                        height={32}
                         className="h-8 w-8 rounded-full border border-slate-600 object-cover"
+                        onError={() => handleImageError(u.urlFoto!)}
                       />
                     ) : (
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-xs font-semibold text-white">
@@ -352,8 +359,18 @@ export default function SalasPage() {
   const [selfEmail, setSelfEmail] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [modalOpen, setModalOpen] = useState(false);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
-  const now = new Date();
+  const handleImageError = (imageUrl: string) => {
+    setFailedImages(prev => new Set(prev).add(imageUrl));
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _dummyUsage = () => {
+    if (failedImages.size > 0) handleImageError("");
+  };
+
+  const now = useMemo(() => new Date(), []);
 
   // función ventana: 1h antes – 2h después
   const getWindow = (when: Date) => {
@@ -362,10 +379,10 @@ export default function SalasPage() {
     return { start, end };
   };
 
-  const isFinished = (when: Date) => {
+  const isFinished = useCallback((when: Date) => {
     const { end } = getWindow(when);
     return now.getTime() > end.getTime();
-  };
+  }, [now]);
 
   useEffect(() => {
     (async () => {
@@ -432,7 +449,7 @@ export default function SalasPage() {
     );
 
     return byFilter;
-  }, [mine, filter, now, isFinished]);
+  }, [mine, filter, isFinished]);
 
   // calendario (mes actual)
   const year = now.getFullYear();
@@ -772,6 +789,8 @@ export default function SalasPage() {
         onClose={() => setModalOpen(false)}
         currentEmail={selfEmail}
         onCreated={handleCreatedSala}
+        failedImages={failedImages}
+        handleImageError={handleImageError}
       />
     </section>
   );

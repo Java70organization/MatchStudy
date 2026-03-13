@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 type Props = {
   onUploaded?: (result: { path: string; signedUrl?: string }) => void;
@@ -89,9 +90,11 @@ export default function ProfilePhotoUploader({ onUploaded }: Props) {
       </div>
       {preview && (
         <div className="flex items-center gap-4">
-          <img
+          <Image
             src={preview}
             alt="Vista previa"
+            width={64}
+            height={64}
             className="w-16 h-16 rounded-full object-cover border border-slate-600"
           />
           <span className="text-xs text-slate-400">Vista previa</span>
