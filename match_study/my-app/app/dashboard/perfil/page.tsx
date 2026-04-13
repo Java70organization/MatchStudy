@@ -35,6 +35,8 @@ export default function PerfilPage() {
     telefono: "",
     universidad: "",
     displayName: "",
+    es_tutor: false,
+    skills: "",
   });
 
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
@@ -75,6 +77,8 @@ export default function PerfilPage() {
             telefono: profile.telefono || "",
             universidad: profile.universidad || "",
             displayName: authDisplay || "",
+            es_tutor: profile.es_tutor || false,
+            skills: profile.skills || "",
           });
 
           if (profile.urlFoto) {
@@ -171,6 +175,8 @@ export default function PerfilPage() {
           telefono: form.telefono,
           universidad: form.universidad,
           displayName: form.displayName,
+          es_tutor: form.es_tutor,
+          skills: form.skills,
         }),
       });
       const data = await res.json();
@@ -184,6 +190,8 @@ export default function PerfilPage() {
               apellidos: data.data?.apellidos ?? form.apellidos,
               telefono: data.data?.telefono ?? form.telefono,
               universidad: data.data?.universidad ?? form.universidad,
+              es_tutor: data.data?.es_tutor ?? form.es_tutor,
+              skills: data.data?.skills ?? form.skills,
             }
           : prev,
       );
@@ -221,6 +229,8 @@ export default function PerfilPage() {
         telefono: userProfile.telefono || "",
         universidad: userProfile.universidad || "",
         displayName: fallbackDisplay,
+        es_tutor: userProfile.es_tutor || false,
+        skills: userProfile.skills || "",
       });
     }
   };
@@ -298,6 +308,20 @@ export default function PerfilPage() {
 
               {/* Badges rápidos */}
               <div className="mt-3 grid w-full gap-2 text-left text-xs text-slate-300">
+                {form.es_tutor && (
+                  <div className="flex items-center gap-2 rounded-xl bg-purple-900/70 px-3 py-2">
+                    <GraduationCap className="h-4 w-4 text-purple-400" />
+                    <div className="flex-1">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                        Rol
+                      </p>
+                      <p className="text-sm font-medium text-purple-300">
+                        Tutor
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2 rounded-xl bg-slate-900/70 px-3 py-2">
                   <GraduationCap className="h-4 w-4 text-purple-400" />
                   <div className="flex-1">
@@ -309,6 +333,20 @@ export default function PerfilPage() {
                     </p>
                   </div>
                 </div>
+
+                {form.es_tutor && form.skills && (
+                  <div className="flex items-center gap-2 rounded-xl bg-emerald-900/70 px-3 py-2">
+                    <BadgeCheck className="h-4 w-4 text-emerald-400" />
+                    <div className="flex-1">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                        Skills
+                      </p>
+                      <p className="text-sm text-emerald-300">
+                        {form.skills}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2 rounded-xl bg-slate-900/70 px-3 py-2">
                   <Phone className="h-4 w-4 text-purple-400" />
@@ -518,6 +556,58 @@ export default function PerfilPage() {
                   }`}
                 />
               </div>
+
+              {/* Es tutor - Switch */}
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                  ¿Eres tutor?
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => editing && setForm((f) => ({ ...f, es_tutor: !f.es_tutor }))}
+                    disabled={!editing}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      form.es_tutor ? "bg-purple-600" : "bg-slate-600"
+                    } ${editing ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        form.es_tutor ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                  <span className="text-sm text-slate-300">
+                    {form.es_tutor ? "Sí, soy tutor" : "No, soy estudiante"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Skills */}
+              {form.es_tutor && (
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                    Skills / Especialidades
+                  </label>
+                  <textarea
+                    value={form.skills}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, skills: e.target.value }))
+                    }
+                    readOnly={!editing}
+                    placeholder="Ej: Matemáticas, Física, Programación, Inglés..."
+                    rows={3}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm text-white outline-none ${
+                      editing
+                        ? "border-slate-600 bg-slate-900 focus:ring-2 focus:ring-purple-500"
+                        : "cursor-not-allowed border-slate-800 bg-slate-900/80 text-slate-300"
+                    }`}
+                  />
+                  <p className="text-xs text-slate-500">
+                    Separa tus skills con comas. Ej: &quot;Matemáticas, Física, Cálculo&quot;
+                  </p>
+                </div>
+              )}
 
               {/* Fecha registro */}
               <div className="space-y-1 md:col-span-2">
