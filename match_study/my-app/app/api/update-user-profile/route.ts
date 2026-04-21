@@ -15,7 +15,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { nombres, apellidos, telefono, universidad, displayName, es_tutor, skills } =
+    const { nombres, apellidos, telefono, universidad, displayName } =
       body ?? {};
 
     if (
@@ -23,9 +23,7 @@ export async function PATCH(request: NextRequest) {
       typeof apellidos !== "string" &&
       typeof telefono !== "string" &&
       typeof universidad !== "string" &&
-      typeof displayName !== "string" &&
-      typeof es_tutor !== "boolean" &&
-      typeof skills !== "string"
+      typeof displayName !== "string"
     ) {
       return NextResponse.json(
         { error: "Sin cambios vÃ¡lidos" },
@@ -34,14 +32,12 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Construir objeto de actualizaciÃ³n solo con campos presentes
-    const update: Record<string, string | null | boolean> = {};
+    const update: Record<string, string | null> = {};
     if (typeof nombres === "string") update.nombres = nombres.trim();
     if (typeof apellidos === "string") update.apellidos = apellidos.trim();
     if (typeof telefono === "string") update.telefono = telefono.trim();
     if (typeof universidad === "string")
       update.universidad = universidad.trim();
-    if (typeof es_tutor === "boolean") update.es_tutor = es_tutor;
-    if (typeof skills === "string") update.skills = skills.trim();
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -59,7 +55,7 @@ export async function PATCH(request: NextRequest) {
       .update(update)
       .eq("email", user.email)
       .select(
-        "id, createdAt, nombres, apellidos, email, telefono, universidad, urlFoto, es_tutor, skills"
+        "id, createdAt, nombres, apellidos, email, telefono, universidad, urlFoto"
       )
       .single();
 

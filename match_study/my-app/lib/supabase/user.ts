@@ -9,8 +9,6 @@ export type DBUser = {
   telefono: string | null;
   universidad: string | null;
   urlFoto: string | null;
-  es_tutor: boolean;
-  skills: string | null;
 };
 
 /**
@@ -48,8 +46,6 @@ export async function createUserProfile(params: {
   telefono?: string | null;
   universidad?: string | null;
   urlFoto?: string | null;
-  es_tutor?: boolean;
-  skills?: string | null;
 }): Promise<DBUser | null> {
   const { supabase } = await import("@/lib/supabase/client");
 
@@ -89,8 +85,6 @@ export async function createUserProfile(params: {
       telefono: params.telefono ?? null,
       universidad: params.universidad ?? null,
       urlFoto: params.urlFoto ?? null,
-      es_tutor: params.es_tutor ?? false,
-      skills: params.skills ?? null,
     };
 
     console.log("Datos a insertar:", insertData);

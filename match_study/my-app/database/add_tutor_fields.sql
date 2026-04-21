@@ -1,14 +1,11 @@
--- Migration: Add tutor fields to usuarios table
--- Execute this SQL in your Supabase SQL Editor
+-- Migration: Configuración de tutor ya implementada
+-- Las skills se almacenan en la tabla tutor_skills (relación muchos-a-muchos)
+-- El estado de tutor se maneja en la tabla tutor_profiles
 
--- Add es_tutor column (boolean, default false)
-ALTER TABLE usuarios
-ADD COLUMN es_tutor BOOLEAN DEFAULT FALSE;
+-- La tabla tutor_profiles ya existe con campos:
+-- user_email, active, modality, hourly_rate_min, hourly_rate_max
 
--- Add skills column (text, nullable)
-ALTER TABLE usuarios
-ADD COLUMN skills TEXT;
+-- La tabla tutor_skills ya existe con campos:
+-- user_email, tag_id, weight
 
--- Add comment for documentation
-COMMENT ON COLUMN usuarios.es_tutor IS 'Indicates if the user is a tutor';
-COMMENT ON COLUMN usuarios.skills IS 'Comma-separated list of tutor skills/specialties';
+-- No se requieren migraciones adicionales para esta funcionalidad

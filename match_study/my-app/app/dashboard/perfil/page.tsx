@@ -35,9 +35,13 @@ export default function PerfilPage() {
     telefono: "",
     universidad: "",
     displayName: "",
-    es_tutor: false,
-    skills: "",
   });
+
+  // Estado para tutor
+  const [isTutor, setIsTutor] = useState(false);
+  const [tutorSkills, setTutorSkills] = useState<Array<{tag_id: number, weight: number, tag_name: string}>>([]);
+  const [skillsText, setSkillsText] = useState("");
+  const [availableTags, setAvailableTags] = useState<Array<{id: number, name: string}>>([]);
 
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
@@ -77,9 +81,10 @@ export default function PerfilPage() {
             telefono: profile.telefono || "",
             universidad: profile.universidad || "",
             displayName: authDisplay || "",
-            es_tutor: profile.es_tutor || false,
-            skills: profile.skills || "",
           });
+
+          // Cargar datos de tutor
+          loadTutorData();
 
           if (profile.urlFoto) {
             try {
@@ -111,6 +116,38 @@ export default function PerfilPage() {
 
   loadUserProfile();
 }, []);
+
+  // Función para cargar datos de tutor
+  const loadTutorData = async () => {
+    try {
+      // Cargar tags disponibles
+      const tagsResponse = await fetch("/api/tags");
+      const tagsData = await tagsResponse.json();
+      if (tagsResponse.ok) {
+        setAvailableTags(tagsData.tags || []);
+      }
+
+      // Cargar estado de tutor
+      const tutorResponse = await fetch("/api/tutor-status");
+      const tutorData = await tutorResponse.json();
+      if (tutorResponse.ok) {
+        setIsTutor(tutorData.is_tutor || false);
+      }
+
+      // Cargar skills de tutor
+      const skillsResponse = await fetch("/api/tutor-skills");
+      const skillsData = await skillsResponse.json();
+      if (skillsResponse.ok) {
+        const skills = (skillsData.skills || []) as Array<{tag_id: number, weight: number, tag_name: string}>;
+        setTutorSkills(skills);
+        // Convertir a formato legible para edición (solo nombres)
+        const formattedSkills = skills.map((s) => s.tag_name).filter(Boolean).join(', ');
+        setSkillsText(formattedSkills);
+      }
+    } catch (error) {
+      console.error("Error cargando datos de tutor:", error);
+    }
+  };
 
   /* -------------------------------- LOAD / ERROR ------------------------------- */
 
@@ -175,8 +212,6 @@ export default function PerfilPage() {
           telefono: form.telefono,
           universidad: form.universidad,
           displayName: form.displayName,
-          es_tutor: form.es_tutor,
-          skills: form.skills,
         }),
       });
       const data = await res.json();
@@ -190,11 +225,15 @@ export default function PerfilPage() {
               apellidos: data.data?.apellidos ?? form.apellidos,
               telefono: data.data?.telefono ?? form.telefono,
               universidad: data.data?.universidad ?? form.universidad,
-              es_tutor: data.data?.es_tutor ?? form.es_tutor,
-              skills: data.data?.skills ?? form.skills,
             }
           : prev,
       );
+
+      // Guardar estado de tutor y skills
+      await saveTutorStatus();
+
+      // Recargar datos de tutor para mostrar skills actualizadas
+      await loadTutorData();
 
       setSaveMsg("Cambios guardados correctamente");
       setEditing(false);
@@ -216,6 +255,45 @@ export default function PerfilPage() {
     }
   };
 
+  // Función para guardar estado de tutor
+  const saveTutorStatus = async () => {
+    // Guardar estado de tutor
+    const tutorRes = await fetch("/api/tutor-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ is_tutor: isTutor }),
+    });
+
+    const tutorData = await tutorRes.json();
+    if (!tutorRes.ok) {
+      throw new Error(tutorData?.error || "Error guardando estado de tutor");
+    }
+
+    // Guardar skills si es tutor
+    if (isTutor && skillsText.trim()) {
+      const skillsArray = skillsText
+        .split(',')
+        .map(skill => ({
+          tag_name: skill.trim(),
+          weight: 5,
+        }))
+        .filter(skill => skill.tag_name.length > 0);
+
+      const skillsRes = await fetch("/api/tutor-skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ skills: skillsArray }),
+      });
+
+      const skillsData = await skillsRes.json();
+      if (!skillsRes.ok) {
+        throw new Error(skillsData?.error || "Error guardando skills");
+      }
+    }
+  };
+
   const handleCancel = () => {
     setEditing(false);
     setSaveMsg(null);
@@ -229,10 +307,15 @@ export default function PerfilPage() {
         telefono: userProfile.telefono || "",
         universidad: userProfile.universidad || "",
         displayName: fallbackDisplay,
-        es_tutor: userProfile.es_tutor || false,
-        skills: userProfile.skills || "",
       });
     }
+    // Recargar datos de tutor
+    if (userEmail) {
+      loadTutorData();
+    }
+    // Resetear skills text
+    const formattedSkills = tutorSkills.map((s) => s.tag_name).filter(Boolean).join(', ');
+    setSkillsText(formattedSkills);
   };
 
   const createdLabel = userProfile?.createdAt
@@ -308,7 +391,7 @@ export default function PerfilPage() {
 
               {/* Badges rápidos */}
               <div className="mt-3 grid w-full gap-2 text-left text-xs text-slate-300">
-                {form.es_tutor && (
+                {isTutor && (
                   <div className="flex items-center gap-2 rounded-xl bg-purple-900/70 px-3 py-2">
                     <GraduationCap className="h-4 w-4 text-purple-400" />
                     <div className="flex-1">
@@ -334,18 +417,36 @@ export default function PerfilPage() {
                   </div>
                 </div>
 
-                {form.es_tutor && form.skills && (
-                  <div className="flex items-center gap-2 rounded-xl bg-emerald-900/70 px-3 py-2">
-                    <BadgeCheck className="h-4 w-4 text-emerald-400" />
-                    <div className="flex-1">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                        Skills
-                      </p>
-                      <p className="text-sm text-emerald-300">
-                        {form.skills}
-                      </p>
+                {isTutor && tutorSkills.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 rounded-xl bg-emerald-900/70 px-3 py-2">
+                      <BadgeCheck className="h-4 w-4 text-emerald-400" />
+                      <div className="flex-1">
+                        <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                          Skills
+                        </p>
+                        <p className="text-sm text-emerald-300">
+                          {tutorSkills.length} especialidades
+                        </p>
+                      </div>
                     </div>
-                  </div>
+
+                    <div className="rounded-2xl border border-emerald-800/60 bg-emerald-950/20 p-3">
+                      <p className="mb-2 text-[11px] uppercase tracking-wide text-emerald-200">
+                        Skills agregadas
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {tutorSkills.map((skill) => (
+                          <span
+                            key={skill.tag_id}
+                            className="rounded-full border border-emerald-700/80 bg-emerald-900/80 px-3 py-1 text-xs font-medium text-emerald-100"
+                          >
+                            {skill.tag_name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 )}
 
                 <div className="flex items-center gap-2 rounded-xl bg-slate-900/70 px-3 py-2">
@@ -565,37 +666,35 @@ export default function PerfilPage() {
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => editing && setForm((f) => ({ ...f, es_tutor: !f.es_tutor }))}
+                    onClick={() => editing && setIsTutor(!isTutor)}
                     disabled={!editing}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      form.es_tutor ? "bg-purple-600" : "bg-slate-600"
+                      isTutor ? "bg-purple-600" : "bg-slate-600"
                     } ${editing ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
                   >
                     <span
                       className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        form.es_tutor ? "translate-x-6" : "translate-x-1"
+                        isTutor ? "translate-x-6" : "translate-x-1"
                       }`}
                     />
                   </button>
                   <span className="text-sm text-slate-300">
-                    {form.es_tutor ? "Sí, soy tutor" : "No, soy estudiante"}
+                    {isTutor ? "Sí, soy tutor" : "No, soy estudiante"}
                   </span>
                 </div>
               </div>
 
               {/* Skills */}
-              {form.es_tutor && (
+              {isTutor && (
                 <div className="space-y-1 md:col-span-2">
                   <label className="text-xs font-medium uppercase tracking-wide text-slate-400">
                     Skills / Especialidades
                   </label>
                   <textarea
-                    value={form.skills}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, skills: e.target.value }))
-                    }
+                    value={skillsText}
+                    onChange={(e) => editing && setSkillsText(e.target.value)}
                     readOnly={!editing}
-                    placeholder="Ej: Matemáticas, Física, Programación, Inglés..."
+                    placeholder="Ingresa tus skills separados por comas&#10;Ej: Python, JavaScript, C++, React"
                     rows={3}
                     className={`w-full rounded-lg border px-3 py-2 text-sm text-white outline-none ${
                       editing
@@ -604,7 +703,9 @@ export default function PerfilPage() {
                     }`}
                   />
                   <p className="text-xs text-slate-500">
-                    Separa tus skills con comas. Ej: &quot;Matemáticas, Física, Cálculo&quot;
+                    {editing
+                      ? `Ingresa tus skills separados por comas. Disponibles: ${availableTags.map(t => t.name).join(', ') || 'cargando...'}`
+                      : `Tienes ${tutorSkills.length} especialidades: ${tutorSkills.map(s => s.tag_name).filter(Boolean).join(', ') || 'ninguna'}`}
                   </p>
                 </div>
               )}
